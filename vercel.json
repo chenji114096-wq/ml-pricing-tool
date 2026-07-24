@@ -1,13 +1,6 @@
 {
-  "buildCommand": null,
-  "outputDirectory": "frontend",
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api/proxy" },
     { "source": "/(.*)", "destination": "/index.html" }
-  ],
-  "functions": {
-    "api/proxy.js": {
-      "runtime": "@vercel/edge"
-    }
-  }
+  ]
 }
