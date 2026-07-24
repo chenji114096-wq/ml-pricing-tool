@@ -214,7 +214,7 @@ async function doSearch() {
     $('productsGrid').innerHTML = '<p style="color:var(--text-tertiary);padding:40px;text-align:center">No se encontraron productos. Intentá con otra búsqueda.</p>';
     hide($('aiPanel'));
     hide($('describeCard'));
-    $('resultsSection').scrollIntoView({ behavior: 'smooth' });
+    $('resultsSection').scrollIntoView({ behavior: 'smooth' }); showShareBar();
     return;
   }
 
@@ -297,7 +297,7 @@ async function doSearch() {
     show($('usageBadge'));
   }
 
-  $('resultsSection').scrollIntoView({ behavior: 'smooth' });
+  $('resultsSection').scrollIntoView({ behavior: 'smooth' }); showShareBar();
 }
 
 // Describe
