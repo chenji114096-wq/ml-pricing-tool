@@ -22,6 +22,17 @@ app = FastAPI(title="ML Precios v2", version="2.0")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True,
                    allow_methods=["*"], allow_headers=["*"])
 DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY", "")
+# ─── 匿名用户试用追踪（IP累计：50次）─────────────
+from collections import defaultdict
+_anon_usage = defaultdict(int)
+
+def check_anon_usage(ip: str):
+    used = _anon_usage[ip]
+    limit = 50
+    if used >= limit:
+        return False, f"免费试用已用完（{used}/{limit}次），请注册登录解锁更多"
+    return True, f"免费试用剩余 {limit - used} 次"
+
 
 # ─── 辅助函数 ────────────────────────────────────────────
 
@@ -190,13 +201,18 @@ def admin_set_setting(data: dict, admin=Depends(require_admin)):
 # ─── 核心功能（搜索+分析）──────────────────────────────
 
 @app.get("/api/search")
-def search(q: str = Query(...), site: str = Query("MLA"), user=Depends(get_current_user)):
-    if not user:
-        return JSONResponse(content={"error":"usage_limit","message":"请先登录","need_payment":True}, status_code=402)
-    
-    allowed, msg, remain = check_usage(user)
-    if not allowed:
-        return JSONResponse(content={"error":"usage_limit","message":msg,"need_payment":True}, status_code=402)
+def search(q: str = Query(...), site: str = Query("MLA"), user=Depends(get_current_user), request: Request = None):
+    if user:
+        allowed, msg, remain = check_usage(user)
+        if not allowed:
+            return JSONResponse(content={"error":"usage_limit","message":msg,"need_payment":True}, status_code=402)
+    else:
+        # Anonymous user — IP-based trial: 3/day
+        client_ip = request.client.host if request.client else "unknown"
+        allowed, msg = check_anon_usage(client_ip)
+        if not allowed:
+            return JSONResponse(content={"error":"usage_limit","message":msg,"need_payment":True}, status_code=402)
+        remain = 50 - _anon_usage[client_ip]
     
     products = search_products(q, site=site)
     if not products:
@@ -214,11 +230,15 @@ def search(q: str = Query(...), site: str = Query("MLA"), user=Depends(get_curre
     ai = {"suggested_price":ai_data.suggested_price,"reason":ai_data.reason,
           "risk_level":ai_data.risk_level,"competitor_insight":ai_data.competitor_insight}
     
-    add_usage(user["id"], "search")
+    if user:
+        add_usage(user["id"], "search")
+    else:
+        client_ip = request.client.host if request.client else "unknown"
+        _anon_usage[client_ip] += 1
     return {"query":q,"site":site,"total":len(products),
             "products":[{"title":p.title,"price":p.price,"currency":p.currency,
                          "condition":p.condition,"url":p.url,"image":getattr(p,'image','')} for p in products[:20]],
-            "stats":stats,"ai":ai,"usage":{"remaining":msg}}
+            "stats":stats,"ai":ai,"usage":{"remaining": msg if user else f"试用剩余 {remain} 次"}}
 
 @app.get("/api/describe")
 def describe(title: str = Query(...), price: float = Query(0), currency: str = Query("ARS"),
