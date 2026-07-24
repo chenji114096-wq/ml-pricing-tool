@@ -1,145 +1,150 @@
-"""Mercado Libre 爬虫模块
-抓取商品数据，支持手机品类搜索
-"""
-import re
+"""ML 官方 API 爬虫 — 对接 developers.mercadolibre.com"""
+import os
 import requests
-from typing import List, Optional
+from typing import List
 from models import Product
 
-# ML 站点代码
-# MLA=阿根廷, MLB=巴西, MLM=墨西哥, MLC=智利, MCO=哥伦比亚, MLU=乌拉圭
-SITES = {
-    "argentina": "MLA",
-    "brasil": "MLB",
-    "mexico": "MLM",
-    "chile": "MLC",
-    "colombia": "MCO",
-    "uruguay": "MLU",
-}
-
+ML_ACCESS_TOKEN = os.environ.get("ML_ACCESS_TOKEN", "")
 HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-                  "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-    "Accept-Language": "es-AR,es;q=0.9,en;q=0.8",
+    "User-Agent": "ML-Pricing-Tool/1.0",
+    "Accept": "application/json",
 }
-
 
 def search_products(query: str, site: str = "MLA", limit: int = 40) -> List[Product]:
-    """
-    通过 ML 公开搜索页面爬取商品列表
-    如果网络不通，可改用官方 API（需要注册开发者获取 access_token）
-    """
-    url = f"https://listado.mercadolibre.com.ar/{query.replace(' ', '-')}"
-    if site != "MLA":
-        url = f"https://listado.mercadolibre.com.{site.lower()}/{query.replace(' ', '-')}"
+    """通过 ML 官方 API 搜索商品"""
+    token = ML_ACCESS_TOKEN
+
+    # 有 token → 用官方 API
+    if token and token != "***":
+        return _api_search(query, site, limit, token)
+
+    # 无 token → 试试公开分类浏览（限少量数据）
+    return _fallback_search(query, site, limit)
+
+
+def _api_search(query: str, site: str, limit: int, token: str) -> List[Product]:
+    """ML 官方 Search API（需要 access_token）"""
+    url = f"https://api.mercadolibre.com/sites/{site}/search"
+    params = {"q": query, "limit": min(limit, 50)}
+    headers = {**HEADERS, "Authorization": f"Bearer {token}"}
 
     try:
-        resp = requests.get(url, headers=HEADERS, timeout=5)
+        resp = requests.get(url, params=params, headers=headers, timeout=8)
         resp.raise_for_status()
+        data = resp.json()
     except Exception as e:
-        print(f"[crawler] 请求失败: {e}")
-        # 备用方案：用测试数据
-        return _get_fallback_data(query)
+        print(f"[API] 搜索失败: {e}")
+        return _mock_data(query, site)
 
-    products = _parse_listing_page(resp.text, limit)
-    if not products:
-        print("[crawler] 解析结果为空，使用测试数据")
-        return _get_fallback_data(query)
+    return _parse_results(data, limit)
+
+
+def _fallback_search(query: str, site: str, limit: int) -> List[Product]:
+    """无 token 时：公开接口抓数据（有限制）"""
+    # 尝试分类页（无需 auth）
+    products = _scrape_listing(query, site, limit)
+    if products:
+        return products
+
+    # 全部失败 → 返回提示数据
+    print("[API] 无 ML token，返回示例数据（配 ML_ACCESS_TOKEN 后即用真实数据）")
+    return _mock_data(query, site)
+
+
+def _scrape_listing(query: str, site: str, limit: int) -> List[Product]:
+    """爬取 listado 页面（可能被反爬）"""
+    try:
+        slug = query.replace(" ", "-").lower()
+        url = f"https://listado.mercadolibre.com.ar/{slug}"
+        if site != "MLA":
+            domain = site.lower() if len(site) <= 3 else site
+            url = f"https://listado.mercadolibre.com.{domain}/{slug}"
+
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/125.0.0.0 Safari/537.36",
+            "Accept-Language": "es-AR,es;q=0.9",
+        }
+        resp = requests.get(url, headers=headers, timeout=8)
+        if resp.status_code != 200:
+            return []
+        html = resp.text
+    except:
+        return []
+
+    # JSON-LD 解析
+    import re, json
+    products = []
+    matches = re.findall(r'<script type="application/ld\+json">(.*?)</script>', html, re.DOTALL)
+    for m in matches:
+        try:
+            data = json.loads(m)
+            if isinstance(data, list):
+                for item in data:
+                    if isinstance(item, dict) and item.get("@type") in ("Product", "ListItem"):
+                        _add_product(products, item)
+            elif isinstance(data, dict) and data.get("@type") in ("Product", "ListItem"):
+                item_list = data.get("itemListElement", [data])
+                for item in (item_list if isinstance(item_list, list) else [data]):
+                    _add_product(products, item)
+        except:
+            pass
 
     return products[:limit]
 
 
-def _parse_listing_page(html: str, limit: int) -> List[Product]:
-    """解析 ML 搜索结果页 HTML"""
+def _add_product(products: list, item: dict):
+    """从 JSON-LD item 提取商品"""
+    title = item.get("name", "")
+    if not title:
+        return
+    item_data = item.get("item", item)
+    offers = item_data.get("offers", {})
+    if isinstance(offers, list):
+        offers = offers[0] if offers else {}
+    price = float(offers.get("price", 0))
+    currency = offers.get("priceCurrency", "ARS")
+    url = item.get("url", item_data.get("url", "#"))
+    image = item_data.get("image", "")
+    if isinstance(image, list):
+        image = image[0] if image else ""
+    if isinstance(image, dict):
+        image = image.get("url", "")
+
+    condition = "new"
+    tl = title.lower()
+    if any(w in tl for w in ["usado", "used", "reacondicionado"]):
+        condition = "used"
+
+    products.append(Product(
+        title=title, price=price, currency=currency,
+        condition=condition, url=url, image=image,
+    ))
+
+
+def _parse_results(data: dict, limit: int) -> List[Product]:
+    """解析 ML API 搜索结果"""
+    results = data.get("results", [])
     products = []
-
-    # 尝试提取 JSON-LD 数据（ML 页面嵌入的结构化数据）
-    import json
-    jsonld_pattern = r'<script type="application/ld\+json">(.*?)</script>'
-    jsonld_matches = re.findall(jsonld_pattern, html, re.DOTALL)
-
-    items = []
-    for j in jsonld_matches:
-        try:
-            data = json.loads(j)
-            if isinstance(data, dict) and data.get("@type") == "Product":
-                items.append(data)
-            elif isinstance(data, list):
-                for item in data:
-                    if isinstance(item, dict) and item.get("@type") == "Product":
-                        items.append(item)
-        except:
-            pass
-
-    # 如果 JSON-LD 没提取到，用正则硬解析
-    if not items:
-        items = _parse_by_regex(html, limit)
-
-    for item in items[:limit]:
-        title = item.get("name", "")
-        offers = item.get("offers", {})
-        price = offers.get("price", 0)
-        if isinstance(offers, list):
-            price = offers[0].get("price", 0) if offers else 0
-
-        currency = offers.get("priceCurrency", "ARS")
-        url = item.get("url", "")
-
-        # 判断新旧
-        condition = "new"
-        if "usado" in title.lower() or "used" in title.lower():
-            condition = "used"
+    for r in results[:limit]:
+        title = r.get("title", "")
+        price = float(r.get("price", 0))
+        currency = r.get("currency_id", "ARS")
+        condition = r.get("condition", "new")
+        url = r.get("permalink", "#")
+        image = r.get("thumbnail", "")
+        # 安全转换图片 URL
+        if image:
+            image = image.replace("http://", "https://")
 
         products.append(Product(
-            title=title,
-            price=float(price),
-            currency=currency,
-            condition=condition,
-            url=url,
+            title=title, price=price, currency=currency,
+            condition=condition, url=url, image=image,
         ))
-
     return products
 
 
-def _parse_by_regex(html: str, limit: int) -> List[dict]:
-    """正则兜底解析"""
-    items = []
-    # 查找商品卡片模式
-    # ML 典型结构：<a class="ui-search-item__group__element shops__items-group-detail ..." href="URL">
-    # 包含 title、价格等信息
-    pattern = r'<a[^>]*ui-search-item__group__element[^>]*href="([^"]+)"[^>]*>.*?<h2[^>]*class="[^"]*ui-search-item__title[^"]*"[^>]*>(.*?)</h2>'
-    matches = re.findall(pattern, html, re.DOTALL)
-    for url, title in matches:
-        items.append({
-            "name": title.strip(),
-            "url": url,
-            "offers": {"price": 0, "priceCurrency": "ARS"},
-        })
-
-    # 提取价格
-    price_pattern = r'class="[^"]*andes-money-amount__fraction[^"]*"[^>]*>([\d.]+)<'
-    prices = re.findall(price_pattern, html)
-
-    for i, item in enumerate(items):
-        if i < len(prices):
-            item["offers"]["price"] = float(prices[i].replace(".", ""))
-
-    return items
-
-
-def _get_fallback_data(query: str) -> List[Product]:
-    """网络不通时的备用测试数据"""
-    fallback_products = [
-        Product(title=f"Samsung Galaxy S24 Ultra 5G 256GB - {query}", price=1299999.0, currency="ARS", condition="new", url="#"),
-        Product(title=f"iPhone 15 Pro Max 256GB - {query}", price=1599999.0, currency="ARS", condition="new", url="#"),
-        Product(title=f"Motorola Edge 50 Pro 5G 256GB - {query}", price=699999.0, currency="ARS", condition="new", url="#"),
-        Product(title=f"Xiaomi Redmi Note 13 Pro 256GB - {query}", price=449999.0, currency="ARS", condition="new", url="#"),
-        Product(title=f"Samsung Galaxy A55 5G 128GB - {query}", price=499999.0, currency="ARS", condition="new", url="#"),
-        Product(title=f"iPhone 14 128GB - {query}", price=899999.0, currency="ARS", condition="new", url="#"),
-        Product(title=f"Motorola G84 5G 256GB - {query}", price=349999.0, currency="ARS", condition="new", url="#"),
-        Product(title=f"Xiaomi POCO X6 Pro 5G 256GB - {query}", price=379999.0, currency="ARS", condition="new", url="#"),
-        Product(title=f"Samsung Galaxy S23 FE 128GB - {query}", price=649999.0, currency="ARS", condition="new", url="#"),
-        Product(title=f"iPhone 13 128GB - Reacondicionado - {query}", price=579999.0, currency="ARS", condition="used", url="#"),
+def _mock_data(query: str, site: str = "MLA") -> List[Product]:
+    """返回真实风格的模拟数据（含提示）"""
+    return [
+        Product(title=f'配置 ML_ACCESS_TOKEN 获取真实数据 | "{query}" 市场分析就绪', price=0, currency="ARS", condition="new", url="#", image=""),
     ]
-    return fallback_products

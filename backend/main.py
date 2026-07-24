@@ -16,6 +16,7 @@ from database import (
 from auth import hash_password, verify_password, create_access_token, decode_token
 from crawler import search_products
 from ai_analysis import analyze_pricing, generate_description
+from tax_calc import calc_profit, format_profit, FX
 from payment import mp_create_checkout, stripe_create_checkout
 
 app = FastAPI(title="ML Precios v2", version="2.0")
@@ -28,7 +29,7 @@ _anon_usage = defaultdict(int)
 
 def check_anon_usage(ip: str):
     used = _anon_usage[ip]
-    limit = 50
+    limit = 100
     if used >= limit:
         return False, f"免费试用已用完（{used}/{limit}次），请注册登录解锁更多"
     return True, f"免费试用剩余 {limit - used} 次"
@@ -212,7 +213,7 @@ def search(q: str = Query(...), site: str = Query("MLA"), user=Depends(get_curre
         allowed, msg = check_anon_usage(client_ip)
         if not allowed:
             return JSONResponse(content={"error":"usage_limit","message":msg,"need_payment":True}, status_code=402)
-        remain = 50 - _anon_usage[client_ip]
+        remain = 100 - _anon_usage[client_ip]
     
     products = search_products(q, site=site)
     if not products:
@@ -235,10 +236,40 @@ def search(q: str = Query(...), site: str = Query("MLA"), user=Depends(get_curre
     else:
         client_ip = request.client.host if request.client else "unknown"
         _anon_usage[client_ip] += 1
+    # 利润计算：对每个产品算到手价+利润率
+    products_with_profit = []
+    for p in products[:20]:
+        profit = calc_profit(p.price, p.currency, cost_price=0)
+        products_with_profit.append({
+            "title": p.title, "price": p.price, "currency": p.currency,
+            "condition": p.condition, "url": p.url,
+            "image": getattr(p, 'image', ''),
+            "_profit": {
+                "net": profit.net_profit, "margin": profit.profit_margin,
+                "ml_fee": profit.ml_fee, "tax": profit.tax_amount,
+                "shipping": profit.shipping_cost, "usd": profit.net_usd,
+                "breakdown": profit.breakdown
+            }
+        })
+    
+    # 最佳利润分析
+    if products_with_profit:
+        margins = [pp["_profit"]["margin"] for pp in products_with_profit]
+        best_idx = margins.index(max(margins))
+        best = products_with_profit[best_idx]
+        best_analysis = {
+            "best_price": best["price"], "best_title": best["title"],
+            "best_margin": best["_profit"]["margin"], "best_net": best["_profit"]["net"],
+            "avg_margin": round(sum(margins) / len(margins), 1) if margins else 0,
+        }
+    else:
+        best_analysis = None
+
     return {"query":q,"site":site,"total":len(products),
-            "products":[{"title":p.title,"price":p.price,"currency":p.currency,
-                         "condition":p.condition,"url":p.url,"image":getattr(p,'image','')} for p in products[:20]],
-            "stats":stats,"ai":ai,"usage":{"remaining": msg if user else f"试用剩余 {remain} 次"}}
+            "products": products_with_profit,
+            "stats":stats,"ai":ai,
+            "profit_analysis": best_analysis,
+            "usage":{"remaining": msg if user else f"试用剩余 {remain} 次"}}
 
 @app.get("/api/describe")
 def describe(title: str = Query(...), price: float = Query(0), currency: str = Query("ARS"),
@@ -247,6 +278,16 @@ def describe(title: str = Query(...), price: float = Query(0), currency: str = Q
     desc = generate_description(title, price, currency, feat_list, api_key=DEEPSEEK_API_KEY)
     add_usage(user["id"], "describe")
     return {"title": title, "description_es": desc}
+
+@app.post("/api/share/bonus")
+async def share_bonus(request: Request):
+    ip = request.client.host if request.client else "unknown"
+    current = _anon_usage[ip]
+    if current >= 100:
+        return {"ok": False, "message": "Max 100"}
+    _anon_usage[ip] = max(0, current - 50)
+    remaining = 100 - _anon_usage[ip]
+    return {"ok": True, "bonus": 50, "remaining": remaining}
 
 @app.get("/api/health")
 def health():
