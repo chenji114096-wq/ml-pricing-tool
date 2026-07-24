@@ -84,7 +84,7 @@ Responde en español con:
             "Content-Type": "application/json",
         },
         json={
-            "model": "deepseek-chat",
+            "model": "deepseek-v4-pro",
             "messages": [{"role": "user", "content": prompt}],
             "temperature": 0.3,
             "max_tokens": 500,
@@ -155,7 +155,7 @@ Requisitos:
             "Content-Type": "application/json",
         },
         json={
-            "model": "deepseek-chat",
+            "model": "deepseek-v4-pro",
             "messages": [{"role": "user", "content": prompt}],
             "temperature": 0.7,
             "max_tokens": 500,
@@ -210,7 +210,7 @@ def _rule_based_analysis(products: List[Product], stats: PriceStats) -> AIAnalys
         f"Rango de precios: {range_str}. "
         f"Precio mediano del mercado: {stats.median_price:.0f} {currency}. "
         f"Precio sugerido: {suggested:.0f} {currency} "
-        f"({((suggested / stats.median_price) - 1) * 100:+.1f}% vs mediana)."
+        f"({((suggested / max(stats.median_price, 1)) - 1) * 100:+.1f}% vs mediana)."
     )
 
     # 生成模板西语描述

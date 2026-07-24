@@ -114,7 +114,7 @@ def calc_profit(selling_price: float, currency: str = "ARS", cost_price: float =
             "ml_commission": {"rate": f"{fee_rate*100:.0f}%", "amount": round(ml_fee, 2)},
             "shipping": {"usd": shipping_usd, "local": round(shipping, 2)},
             "tax": {
-                "rate": f"{tax_config['iva']*100:.0f}% IVA + {tax_config['income_tax']*100:.0f}%",
+                "rate": f"{tax_config['iva']*100:.0f}% IVA + {tax_config.get('income', 0)*100:.0f}%",
                 "amount": round(total_tax, 2)
             },
             "cost": round(base, 2),
