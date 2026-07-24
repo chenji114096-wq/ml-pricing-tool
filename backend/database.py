@@ -1,128 +1,75 @@
-"""数据库配置：支持 SQLite（本地开发）和 Supabase PostgreSQL（生产）"""
+"""数据库：通过 Supabase REST API 操作（不需psycopg2）"""
 import os
-from datetime import datetime, timedelta
-from sqlalchemy import create_engine, Column, String, Integer, Float, Boolean, DateTime, ForeignKey, Text
-from sqlalchemy.orm import declarative_base, sessionmaker, relationship
+import requests
+from datetime import datetime
 
-# 数据库连接：优先用环境变量（Render上配置），默认用SQLite本地开发
-DATABASE_URL = os.environ.get(
-    "DATABASE_URL",
-    "sqlite:///./data/ml_pricing.db"
-)
+SUPABASE_URL = os.environ.get("SUPABASE_URL", "https://lzyrulkuerxojuikwpam.supabase.co")
+SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_KEY",
+    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imx6eXJ1bGt1ZXJ4b2p1aWt3cGFtIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4NDg1MzE3MywiZXhwIjoyMTAwNDI5MTczfQ.BGSasxR0O_ercCWPw06RPSVUkQjSYufh1KIAUc1AiD8")
 
-# 如果是 SQLite 需要额外参数
-connect_args = {}
-if DATABASE_URL.startswith("sqlite"):
-    os.makedirs("data", exist_ok=True)
-    connect_args["check_same_thread"] = False
+def h(svc=False):
+    key = SUPABASE_KEY if svc else os.environ.get("SUPABASE_ANON_KEY", "")
+    return {"apikey": key, "Authorization": f"Bearer {key}", "Content-Type": "application/json", "Prefer": "return=representation"}
 
-engine = create_engine(DATABASE_URL, connect_args=connect_args if connect_args else {})
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-Base = declarative_base()
+def api(method, table, params="", data=None):
+    url = f"{SUPABASE_URL}/rest/v1/{table}{params}"
+    r = requests.request(method, url, headers=h(True), json=data, timeout=15)
+    return r.json() if r.ok else (r.text if not r.ok else [])
 
+def get_user(email):
+    users = api("GET", "users", f"?email=eq.{email}&limit=1")
+    return users[0] if users else None
 
-class User(Base):
-    __tablename__ = "users"
-    id = Column(String(36), primary_key=True, default=lambda: os.urandom(16).hex())
-    email = Column(String(255), unique=True, nullable=False)
-    password_hash = Column(String(255), nullable=False)
-    name = Column(String(100), default="")
-    role = Column(String(20), default="user")  # user / admin
-    created_at = Column(DateTime, default=datetime.utcnow)
-    is_active = Column(Boolean, default=True)
-    subscription = relationship("UserSubscription", uselist=False, back_populates="user")
-    usage = relationship("UsageRecord", back_populates="user")
+def create_user(email, pw_hash, name="", role="user"):
+    return api("POST", "users", data={"email":email,"password_hash":pw_hash,"name":name,"role":role})
 
+def get_enabled_plans():
+    return api("GET", "subscription_plans", "?enabled=eq.true&order=sort_order.asc")
 
-class SubscriptionPlan(Base):
-    __tablename__ = "subscription_plans"
-    id = Column(String(36), primary_key=True, default=lambda: os.urandom(16).hex())
-    name = Column(String(100), nullable=False)
-    slug = Column(String(50), unique=True, nullable=False)
-    description = Column(Text, default="")
-    price_monthly = Column(Float, default=0)
-    price_yearly = Column(Float, default=0)
-    search_limit_monthly = Column(Integer, default=0)  # -1 = 无限
-    include_ai_description = Column(Boolean, default=False)
-    enabled = Column(Boolean, default=True)
-    sort_order = Column(Integer, default=0)
-    created_at = Column(DateTime, default=datetime.utcnow)
+def get_plan(pid):
+    p = api("GET", "subscription_plans", f"?id=eq.{pid}&limit=1")
+    return p[0] if p else None
 
+def update_plan(pid, data):
+    api("PATCH", "subscription_plans", f"?id=eq.{pid}", data)
+    return True
 
-class UserSubscription(Base):
-    __tablename__ = "user_subscriptions"
-    id = Column(String(36), primary_key=True, default=lambda: os.urandom(16).hex())
-    user_id = Column(String(36), ForeignKey("users.id"), unique=True)
-    plan_id = Column(String(36), ForeignKey("subscription_plans.id"))
-    status = Column(String(20), default="active")
-    started_at = Column(DateTime, default=datetime.utcnow)
-    expires_at = Column(DateTime, nullable=True)
-    payment_provider = Column(String(50), default="")
-    payment_subscription_id = Column(String(255), default="")
-    user = relationship("User", back_populates="subscription")
-    plan = relationship("SubscriptionPlan")
+def get_all_plans():
+    return api("GET", "subscription_plans", "?order=sort_order.asc")
 
+def get_sub(user_id):
+    s = api("GET", "user_subscriptions", f"?user_id=eq.{user_id}&select=*,plan:plan_id(*)&limit=1")
+    return s[0] if s else None
 
-class UsageRecord(Base):
-    __tablename__ = "usage_records"
-    id = Column(String(36), primary_key=True, default=lambda: os.urandom(16).hex())
-    user_id = Column(String(36), ForeignKey("users.id"), nullable=False)
-    action = Column(String(50), nullable=False)
-    cost = Column(Integer, default=1)
-    created_at = Column(DateTime, default=datetime.utcnow, index=True)
-    user = relationship("User", back_populates="usage")
+def get_usage(user_id, action, since):
+    u = api("GET", "usage_records", f"?user_id=eq.{user_id}&action=eq.{action}&created_at=gte.{since.isoformat()}&select=count")
+    return u[0]["count"] if u else 0
 
+def add_usage(user_id, action="search"):
+    api("POST", "usage_records", data={"user_id":user_id,"action":action,"cost":1})
 
-class PaymentRecord(Base):
-    __tablename__ = "payment_records"
-    id = Column(String(36), primary_key=True, default=lambda: os.urandom(16).hex())
-    user_id = Column(String(36), ForeignKey("users.id"), nullable=False)
-    plan_id = Column(String(36), ForeignKey("subscription_plans.id"), nullable=True)
-    provider = Column(String(50), nullable=False)
-    amount = Column(Float, nullable=False)
-    currency = Column(String(10), default="USD")
-    status = Column(String(20), default="pending")
-    provider_payment_id = Column(String(255), default="")
-    created_at = Column(DateTime, default=datetime.utcnow)
+def get_payments(user_id):
+    return api("GET", "payment_records", f"?user_id=eq.{user_id}&order=created_at.desc&limit=20")
 
+def get_all_users():
+    return api("GET", "users", "?order=created_at.desc&limit=100")
 
-class SystemSetting(Base):
-    __tablename__ = "system_settings"
-    key = Column(String(100), primary_key=True)
-    value = Column(Text, default="")
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+def get_stats():
+    def count(t, f=""): 
+        c = api("GET", t, f"?select=count{f}")
+        return c[0]["count"] if c else 0
+    return {
+        "total_users": count("users"),
+        "active_subs": count("user_subscriptions", "&status=eq.active"),
+        "total_searches": count("usage_records", "&action=eq.search"),
+        "total_payments": count("payment_records", "&status=eq.completed"),
+    }
 
+def get_settings():
+    s = api("GET", "system_settings")
+    return {x["key"]: x["value"] for x in s} if s else {}
 
-def init_db():
-    """创建所有表 + 种子数据"""
-    Base.metadata.create_all(engine)
-    db = SessionLocal()
-    try:
-        # 默认套餐
-        plans_data = [
-            ("free", "Free", "每日3次搜索，基础价格统计", 0, 0, 90, False, True, 1),
-            ("pro", "Pro", "无限搜索 + AI定价建议 + AI商品描述", 19.99, 199.99, -1, True, True, 2),
-            ("enterprise", "Enterprise", "全部功能 + API接入 + 专属支持", 99.99, 999.99, -1, True, True, 3),
-            ("pay_per_search", "按次付费", "充值搜索次数，无需月费", 0, 0, 0, True, True, 4),
-        ]
-        for slug, name, desc, pm, py, slm, ai, en, so in plans_data:
-            if not db.query(SubscriptionPlan).filter_by(slug=slug).first():
-                db.add(SubscriptionPlan(
-                    slug=slug, name=name, description=desc,
-                    price_monthly=pm, price_yearly=py,
-                    search_limit_monthly=slm, include_ai_description=ai,
-                    enabled=en, sort_order=so,
-                ))
-
-        # 管理员（密码: admin123）
-        from auth import hash_password
-        if not db.query(User).filter_by(email="admin@mlprecios.com").first():
-            db.add(User(
-                email="admin@mlprecios.com",
-                password_hash=hash_password("admin123"),
-                name="Admin", role="admin",
-            ))
-
-        db.commit()
-    finally:
-        db.close()
+def set_setting(key, val):
+    api("POST", "system_settings", data={"key":key,"value":val},
+        headers_extra={"Prefer": "resolution=merge-duplicates"})
+    return True
