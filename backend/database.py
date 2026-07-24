@@ -65,6 +65,25 @@ def get_stats():
         "total_payments": count("payment_records", "&status=eq.completed"),
     }
 
+
+def create_payment(user_id, plan_id, provider, amount, currency, status, provider_payment_id, provider_data=None):
+    return api("POST", "payment_records", data={
+        "user_id": user_id, "plan_id": plan_id, "provider": provider,
+        "amount": amount, "currency": currency, "status": status,
+        "provider_payment_id": provider_payment_id, "provider_data": provider_data
+    })
+
+def upsert_subscription(user_id, plan_id, provider="", payment_subscription_id=""):
+    from datetime import timedelta
+    existing = get_sub(user_id)
+    data = {
+        "user_id": user_id, "plan_id": plan_id, "status": "active",
+        "payment_provider": provider, "payment_subscription_id": payment_subscription_id,
+        "expires_at": (datetime.utcnow() + timedelta(days=30)).isoformat()
+    }
+    if existing:
+        return api("PATCH", "user_subscriptions", f"?user_id=eq.{user_id}", data)
+    return api("POST", "user_subscriptions", data=data)
 def get_settings():
     s = api("GET", "system_settings")
     return {x["key"]: x["value"] for x in s} if s else {}
