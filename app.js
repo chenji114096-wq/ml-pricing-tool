@@ -3,7 +3,8 @@
    ═══════════════════════════════════════════════════════════ */
 
 // API base — works both locally (direct) and on Vercel (proxy to server)
-const API = '/api';
+// API base — detect context: /ml/ on nginx, direct on Vercel/local
+const API = window.location.pathname.startsWith('/ml/') ? '/ml/api' : '/api';
 let TOKEN = localStorage.getItem('ml_token') || '';
 let USER = null;
 let PLANS = [];
