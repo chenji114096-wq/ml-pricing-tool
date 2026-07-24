@@ -1,0 +1,2 @@
+# ML Precios
+python_version = "3.12"

@@ -1,0 +1,15 @@
+{
+  "buildCommand": null,
+  "outputDirectory": "frontend",
+  "rewrites": [
+    { "source": "/(.*)", "destination": "/ml/index.html" }
+  ],
+  "headers": [
+    {
+      "source": "/ml/(.*)",
+      "headers": [
+        { "key": "Cache-Control", "value": "no-cache, must-revalidate" }
+      ]
+    }
+  ]
+}

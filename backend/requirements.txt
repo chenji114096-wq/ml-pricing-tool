@@ -1,0 +1,10 @@
+# ML Precios - Backend
+
+fastapi
+uvicorn
+sqlalchemy
+psycopg2-binary
+python-jose[cryptography]
+requests
+stripe
+mercadopago
