@@ -1,218 +1,204 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ML Precios — Analizador de Precios con IA</title>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/ml/style.css?v=2">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ML Precios — Inteligencia de Precios con IA</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <div class="container">
-        <!-- Header -->
-        <header class="header">
-            <div class="header-left">
-                <span class="logo-icon">📊</span>
-                <h1>ML Precios</h1>
-            </div>
-            <div class="header-right" id="headerRight">
-                <div class="usage-badge hidden" id="usageBadge">
-                    📈 <span id="usageCount">0</span> búsquedas
-                </div>
-                <span id="userName"></span>
-                <button class="btn btn-sm" id="loginBtn" onclick="showAuth()">Iniciar sesión</button>
-                <button class="btn btn-sm btn-primary hidden" id="subBtn" onclick="showSubPage()">Suscripción</button>
-                <button class="btn btn-sm hidden" id="adminBtn" onclick="toggleAdmin()">⚙️ Admin</button>
-                <button class="btn btn-sm hidden" id="logoutBtn" onclick="logout()">Cerrar sesión</button>
-            </div>
-        </header>
-
-        <!-- Auth Modal -->
-        <div class="modal-overlay" id="authModal">
-            <div class="modal">
-                <div class="tabs">
-                    <button class="tab-btn active" onclick="switchTab('login')">Iniciar sesión</button>
-                    <button class="tab-btn" onclick="switchTab('register')">Registrarse</button>
-                </div>
-                <div id="loginForm">
-                    <h2>Iniciar sesión</h2>
-                    <div class="form-group">
-                        <label>Email</label>
-                        <input type="email" id="loginEmail" placeholder="tu@email.com" />
-                    </div>
-                    <div class="form-group">
-                        <label>Contraseña</label>
-                        <input type="password" id="loginPass" placeholder="••••••" onkeydown="if(event.key==='Enter')doLogin()" />
-                    </div>
-                    <div class="form-error" id="loginError"></div>
-                    <button class="btn btn-primary" style="width:100%" onclick="doLogin()">Iniciar sesión</button>
-                </div>
-                <div id="registerForm" style="display:none">
-                    <h2>Crear cuenta</h2>
-                    <div class="form-group">
-                        <label>Nombre (opcional)</label>
-                        <input type="text" id="regName" placeholder="Tu nombre" />
-                    </div>
-                    <div class="form-group">
-                        <label>Email</label>
-                        <input type="email" id="regEmail" placeholder="tu@email.com" />
-                    </div>
-                    <div class="form-group">
-                        <label>Contraseña</label>
-                        <input type="password" id="regPass" placeholder="••••••" />
-                    </div>
-                    <div class="form-error" id="regError"></div>
-                    <button class="btn btn-primary" style="width:100%" onclick="doRegister()">Crear cuenta</button>
-                </div>
-            </div>
+<div id="app">
+  <!-- Nav -->
+  <nav class="nav" id="nav">
+    <div class="nav-inner">
+      <div class="nav-left">
+        <span class="logo">ML Precios</span>
+        <div class="nav-links">
+          <a href="#" class="nav-link active" data-page="home">Inicio</a>
+          <a href="#" class="nav-link" data-page="pricing">Planes</a>
+          <a href="#" class="nav-link hidden" data-page="admin" id="adminNavLink">Admin</a>
         </div>
-
-        <!-- Main Content -->
-        <div class="main-content" id="mainContent">
-
-            <!-- Search -->
-            <section class="search-section">
-                <p class="subtitle">Analizador de precios con IA para vendedores de Mercado Libre</p>
-                <div class="search-box">
-                    <input type="text" id="searchInput" placeholder="Ej: samsung s24 ultra, iphone 15 pro..." />
-                    <select id="siteSelect">
-                        <option value="MLA">🇦🇷 Argentina</option>
-                        <option value="MLB">🇧🇷 Brasil</option>
-                        <option value="MLM">🇲🇽 México</option>
-                        <option value="MLC">🇨🇱 Chile</option>
-                    </select>
-                    <button id="searchBtn" class="btn btn-primary" onclick="doSearch()">Analizar</button>
-                </div>
-                <div class="search-tips">
-                    <span>🔥 Populares:</span>
-                    <button class="tip-btn" data-q="samsung s24">Samsung S24</button>
-                    <button class="tip-btn" data-q="iphone 15">iPhone 15</button>
-                    <button class="tip-btn" data-q="moto g84">Moto G84</button>
-                    <button class="tip-btn" data-q="xiaomi redmi note 13">Xiaomi RN13</button>
-                </div>
-            </section>
-
-            <!-- Loading -->
-            <div id="loading" class="loading hidden">
-                <div class="spinner"></div>
-                <p>Analizando el mercado...</p>
-            </div>
-
-            <!-- Error / Payment Required -->
-            <div id="error" class="error-card hidden"></div>
-
-            <!-- Results -->
-            <div id="results" class="hidden">
-
-                <!-- Stats Summary -->
-                <section class="stats-section">
-                    <div class="stat-card">
-                        <span class="stat-label">Precio mínimo</span>
-                        <span class="stat-value" id="statMin">—</span>
-                    </div>
-                    <div class="stat-card highlight">
-                        <span class="stat-label">💰 Precio mediano</span>
-                        <span class="stat-value" id="statMedian">—</span>
-                    </div>
-                    <div class="stat-card">
-                        <span class="stat-label">Precio máximo</span>
-                        <span class="stat-value" id="statMax">—</span>
-                    </div>
-                    <div class="stat-card">
-                        <span class="stat-label">Precio promedio</span>
-                        <span class="stat-value" id="statAvg">—</span>
-                    </div>
-                    <div class="stat-card">
-                        <span class="stat-label">Anuncios totales</span>
-                        <span class="stat-value" id="statTotal">—</span>
-                    </div>
-                </section>
-
-                <!-- AI Recommendation -->
-                <section class="ai-section">
-                    <div class="ai-header">
-                        <span class="ai-badge">🤖 IA</span>
-                        <h2>Recomendación de precio</h2>
-                    </div>
-                    <div class="ai-content">
-                        <div class="ai-price-box">
-                            <span class="ai-price-label">Precio sugerido</span>
-                            <span class="ai-price-value" id="aiPrice">—</span>
-                        </div>
-                        <div class="ai-details">
-                            <div class="ai-row">
-                                <span class="ai-label">Riesgo</span>
-                                <span class="ai-tag" id="aiRisk">—</span>
-                            </div>
-                            <div class="ai-row">
-                                <span class="ai-label">Análisis</span>
-                                <span class="ai-text" id="aiReason">—</span>
-                            </div>
-                            <div class="ai-row">
-                                <span class="ai-label">Insight competitivo</span>
-                                <span class="ai-text" id="aiInsight">—</span>
-                            </div>
-                        </div>
-                    </div>
-                </section>
-
-                <!-- Product List -->
-                <section class="products-section">
-                    <h2>Productos encontrados (<span id="productCount">0</span>)</h2>
-                    <div id="productList" class="product-list"></div>
-                </section>
-
-                <!-- Description Generator -->
-                <section class="desc-section">
-                    <div class="desc-header">
-                        <span class="ai-badge">✍️ IA</span>
-                        <h2>Generar descripción en español</h2>
-                    </div>
-                    <div class="desc-content">
-                        <div class="desc-form">
-                            <input type="text" id="descTitle" placeholder="Título del producto" />
-                            <input type="number" id="descPrice" placeholder="Precio" />
-                            <input type="text" id="descFeatures" placeholder="Características (separadas por coma)" />
-                            <button id="generateDescBtn" class="btn btn-primary" onclick="generateDescription()">Generar descripción</button>
-                        </div>
-                        <div id="descResult" class="desc-result hidden">
-                            <h3>Descripción generada:</h3>
-                            <div id="descText" class="desc-text"></div>
-                            <button id="copyDescBtn" class="btn copy-btn" onclick="copyDescription()">📋 Copiar</button>
-                        </div>
-                    </div>
-                </section>
-            </div>
+      </div>
+      <div class="nav-right">
+        <span class="usage-indicator hidden" id="usageIndicator">
+          <span class="usage-dot"></span>
+          <span id="usageLabel">3 búsquedas</span>
+        </span>
+        <button class="btn btn-ghost" id="loginBtn">Iniciar sesión</button>
+        <button class="btn btn-primary hidden" id="userBtn"><span id="userBtnName">Usuario</span> ▾</button>
+        <div class="user-dropdown hidden" id="userDropdown">
+          <div class="dropdown-item" onclick="showPage('subscription')">Mi suscripción</div>
+          <div class="dropdown-item" onclick="showPage('history')">Historial</div>
+          <div class="dropdown-divider"></div>
+          <div class="dropdown-item" onclick="logout()">Cerrar sesión</div>
         </div>
-
-        <!-- Subscription Page -->
-        <div class="sub-page" id="subPage">
-            <h2>Planes y precios</h2>
-            <p class="subtitle">Elige el plan que mejor se adapte a tu negocio</p>
-            <div class="plans-grid" id="plansGrid"></div>
-            <div class="payment-section" id="paymentSection">
-                <h3>Método de pago</h3>
-                <div class="payment-btns">
-                    <button class="btn btn-primary" onclick="checkout('stripe')">💳 Pagar con Stripe</button>
-                    <button class="btn" onclick="checkout('mercadopago')">🇦🇷 Pagar con Mercado Pago</button>
-                </div>
-            </div>
-            <div class="payment-history" id="paymentHistory"></div>
-        </div>
-
-        <!-- Admin Panel -->
-        <div class="admin-panel" id="adminPanel">
-            <h3>🔐 Panel de Administración</h3>
-            <div class="admin-stats" id="adminStats"></div>
-            <h4 style="margin:16px 0 8px;font-size:14px;color:var(--text2)">Planes</h4>
-            <div id="adminPlans"></div>
-        </div>
-
-        <!-- Footer -->
-        <footer class="footer">
-            <p>Hecho con ❤️ para vendedores de Latinoamérica</p>
-        </footer>
+      </div>
     </div>
-    <script src="/ml/app.js?v=3"></script>
+  </nav>
+
+  <!-- Pages -->
+  <!-- HOME -->
+  <main class="page active" id="page-home">
+    <section class="hero">
+      <div class="hero-badge">🔍 Precios inteligentes · IA</div>
+      <h1 class="hero-title">Analiza precios de<br>Mercado Libre con IA</h1>
+      <p class="hero-subtitle">Busca productos, compara precios, y obtén recomendaciones<br>basadas en análisis de datos en tiempo real.</p>
+      <div class="search-box">
+        <span class="search-icon">⌕</span>
+        <input type="text" class="search-input" id="searchInput" placeholder="Buscar producto... ej: iPhone 15, zapatillas Nike, MacBook Pro" autocomplete="off">
+        <button class="btn btn-primary search-btn" id="searchBtn">Analizar</button>
+      </div>
+      <div class="search-tips">
+        <span class="tip-label">Popular:</span>
+        <button class="tip-btn" data-q="iPhone 15">iPhone 15</button>
+        <button class="tip-btn" data-q="Samsung Galaxy S24">Samsung S24</button>
+        <button class="tip-btn" data-q="AirPods Pro">AirPods Pro</button>
+        <button class="tip-btn" data-q="MacBook Pro M3">MacBook M3</button>
+        <button class="tip-btn" data-q="PlayStation 5">PS5</button>
+      </div>
+    </section>
+
+    <!-- Search Results -->
+    <section class="results-section hidden" id="resultsSection">
+      <!-- Stats Bar -->
+      <div class="stats-bar" id="statsBar"></div>
+
+      <!-- AI Analysis -->
+      <div class="ai-card hidden" id="aiCard">
+        <div class="ai-header">
+          <span class="ai-icon">🤖</span>
+          <span>Análisis de IA</span>
+        </div>
+        <div class="ai-body" id="aiBody"></div>
+      </div>
+
+      <!-- Products Grid -->
+      <div class="products-grid" id="productsGrid"></div>
+    </section>
+
+    <section class="features-section" id="featuresSection">
+      <h2 class="section-title">Todo lo que necesitas para vender mejor</h2>
+      <div class="features-grid">
+        <div class="feature-card">
+          <div class="feature-icon">📊</div>
+          <h3>Análisis de precios</h3>
+          <p>Precio mínimo, máximo, promedio y mediana del mercado en tiempo real.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">🤖</div>
+          <h3>Recomendación IA</h3>
+          <p>DeepSeek analiza la competencia y sugiere el precio óptimo para tu producto.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">📝</div>
+          <h3>Descripciones automáticas</h3>
+          <p>Genera descripciones profesionales para tus publicaciones con IA.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">📈</div>
+          <h3>Múltiples categorías</h3>
+          <p>Busca en cualquier categoría de Mercado Libre Argentina, México, Chile y más.</p>
+        </div>
+      </div>
+    </section>
+
+    <footer class="footer">
+      <p>ML Precios © 2026 · Hecho con ❤️ para vendedores de Latinoamérica</p>
+    </footer>
+  </main>
+
+  <!-- PRICING -->
+  <main class="page" id="page-pricing">
+    <div class="page-header">
+      <h1>Planes y precios</h1>
+      <p>Elige el plan que mejor se adapte a tu negocio</p>
+    </div>
+    <div class="pricing-grid" id="pricingGrid">
+      <div class="pricing-card free">
+        <h3>Gratis</h3>
+        <div class="price">$0<span>/mes</span></div>
+        <ul class="price-features">
+          <li>3 búsquedas por día</li>
+          <li>Análisis básico de precios</li>
+          <li>Soporte por email</li>
+        </ul>
+        <button class="btn btn-ghost" style="width:100%" onclick="showAuth()">Comenzar gratis</button>
+      </div>
+    </div>
+  </main>
+
+  <!-- SUBSCRIPTION -->
+  <main class="page" id="page-subscription">
+    <div class="page-header">
+      <h1>Mi suscripción</h1>
+    </div>
+    <div class="sub-card" id="subCard"></div>
+  </main>
+
+  <!-- HISTORY -->
+  <main class="page" id="page-history">
+    <div class="page-header">
+      <h1>Historial de pagos</h1>
+    </div>
+    <div class="history-list" id="historyList">
+      <p class="empty-state">No hay pagos registrados.</p>
+    </div>
+  </main>
+
+  <!-- ADMIN -->
+  <main class="page" id="page-admin">
+    <div class="page-header">
+      <h1>Panel de administración</h1>
+    </div>
+    <div class="admin-grid">
+      <div class="admin-section" id="adminStats"></div>
+      <div class="admin-section" id="adminUsers"></div>
+    </div>
+  </main>
+</div>
+
+<!-- Auth Modal -->
+<div class="modal-overlay hidden" id="authModal">
+  <div class="modal" onclick="event.stopPropagation()">
+    <button class="modal-close" onclick="hideAuth()">✕</button>
+    <div class="modal-tabs">
+      <button class="modal-tab active" data-tab="login">Iniciar sesión</button>
+      <button class="modal-tab" data-tab="register">Registrarse</button>
+    </div>
+    <div class="modal-body">
+      <div class="auth-form active" id="loginForm">
+        <div class="field">
+          <label>Email</label>
+          <input type="email" class="input" id="loginEmail" placeholder="tu@email.com">
+        </div>
+        <div class="field">
+          <label>Contraseña</label>
+          <input type="password" class="input" id="loginPass" placeholder="••••••••">
+        </div>
+        <div class="form-error" id="loginError"></div>
+        <button class="btn btn-primary" style="width:100%" onclick="doLogin()">Iniciar sesión</button>
+      </div>
+      <div class="auth-form" id="registerForm">
+        <div class="field">
+          <label>Nombre</label>
+          <input type="text" class="input" id="regName" placeholder="Tu nombre">
+        </div>
+        <div class="field">
+          <label>Email</label>
+          <input type="email" class="input" id="regEmail" placeholder="tu@email.com">
+        </div>
+        <div class="field">
+          <label>Contraseña</label>
+          <input type="password" class="input" id="regPass" placeholder="••••••••">
+        </div>
+        <div class="form-error" id="regError"></div>
+        <button class="btn btn-primary" style="width:100%" onclick="doRegister()">Crear cuenta</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="app.js"></script>
 </body>
 </html>
