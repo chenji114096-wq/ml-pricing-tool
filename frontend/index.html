@@ -4,198 +4,325 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ML Precios — Inteligencia de Precios con IA</title>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<div id="app">
-  <!-- Nav -->
-  <nav class="nav" id="nav">
-    <div class="nav-inner">
-      <div class="nav-left">
-        <span class="logo">ML Precios</span>
-        <div class="nav-links">
-          <a href="#" class="nav-link active" data-page="home">Inicio</a>
-          <a href="#" class="nav-link" data-page="pricing">Planes</a>
-          <a href="#" class="nav-link hidden" data-page="admin" id="adminNavLink">Admin</a>
+
+<!-- ========== NAVIGATION ========== -->
+<nav class="nav" id="nav">
+  <div class="nav-inner">
+    <div class="nav-brand">
+      <svg class="brand-icon" width="24" height="24" viewBox="0 0 24 24" fill="none">
+        <rect x="2" y="2" width="20" height="20" rx="5" fill="url(#brandGrad)"/>
+        <path d="M7 16L12 7L17 16" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        <defs><linearGradient id="brandGrad" x1="0" y1="0" x2="24" y2="24"><stop stop-color="#6366f1"/><stop offset="1" stop-color="#8b5cf6"/></linearGradient></defs>
+      </svg>
+      <span class="brand-text">ML<span class="brand-accent">Precios</span></span>
+    </div>
+    <div class="nav-center">
+      <a href="#" class="nav-link active" data-page="home">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+        Inicio
+      </a>
+      <a href="#" class="nav-link" data-page="pricing">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+        Planes
+      </a>
+      <a href="#" class="nav-link hidden" data-page="admin" id="adminNavLink">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        Admin
+      </a>
+    </div>
+    <div class="nav-right">
+      <div class="usage-badge hidden" id="usageBadge">
+        <span class="usage-dot"></span>
+        <span id="usageLabel">3 búsquedas</span>
+      </div>
+      <button class="btn btn-ghost hidden" id="userMenuBtn">
+        <div class="avatar" id="userAvatar"></div>
+        <span id="userName"></span>
+        <svg class="chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+      <div class="dropdown hidden" id="userDropdown">
+        <a class="dropdown-item" onclick="showPage('subscription')">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
+          Mi suscripción
+        </a>
+        <a class="dropdown-item" onclick="showPage('history')">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          Historial
+        </a>
+        <div class="dropdown-divider"></div>
+        <a class="dropdown-item danger" onclick="logout()">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+          Cerrar sesión
+        </a>
+      </div>
+      <button class="btn btn-primary" id="loginBtn">Iniciar sesión</button>
+    </div>
+  </div>
+</nav>
+
+<!-- ========== PAGE: HOME ========== -->
+<main class="page active" id="page-home">
+  <!-- Hero -->
+  <section class="hero">
+    <div class="hero-glow"></div>
+    <div class="hero-content">
+      <div class="hero-badge">
+        <span class="badge-dot"></span>
+        Potenciado por Inteligencia Artificial
+      </div>
+      <h1 class="hero-title">
+        Precios inteligentes
+        <span class="gradient-text">para vender más</span>
+      </h1>
+      <p class="hero-subtitle">
+        Analiza el mercado de Mercado Libre en tiempo real. IA que te dice
+        exactamente a qué precio vender y por qué.
+      </p>
+      <div class="search-panel" id="searchPanel">
+        <div class="search-row">
+          <svg class="search-prefix" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+          <input type="text" class="search-input" id="searchInput" placeholder="Buscar producto… ej: iPhone 15 Pro, zapatillas Nike Air" autocomplete="off">
+          <select class="site-select" id="siteSelect">
+            <option value="MLA">🇦🇷 Argentina</option>
+            <option value="MLM">🇲🇽 México</option>
+            <option value="MLC">🇨🇱 Chile</option>
+            <option value="MLB">🇧🇷 Brasil</option>
+            <option value="MLU">🇺🇾 Uruguay</option>
+          </select>
+          <button class="btn btn-primary btn-search" id="searchBtn">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+            Analizar
+          </button>
+        </div>
+        <div class="search-tags">
+          <span class="tags-label">Popular:</span>
+          <button class="tag" data-q="iPhone 15 Pro">iPhone 15 Pro</button>
+          <button class="tag" data-q="Samsung Galaxy S24">Samsung S24</button>
+          <button class="tag" data-q="AirPods Pro 2">AirPods Pro</button>
+          <button class="tag" data-q="MacBook Pro M3">MacBook M3</button>
+          <button class="tag" data-q="PlayStation 5">PS5</button>
+          <button class="tag" data-q="Nike Air Max">Nike Air Max</button>
         </div>
       </div>
-      <div class="nav-right">
-        <span class="usage-indicator hidden" id="usageIndicator">
-          <span class="usage-dot"></span>
-          <span id="usageLabel">3 búsquedas</span>
-        </span>
-        <button class="btn btn-ghost" id="loginBtn">Iniciar sesión</button>
-        <button class="btn btn-primary hidden" id="userBtn"><span id="userBtnName">Usuario</span> ▾</button>
-        <div class="user-dropdown hidden" id="userDropdown">
-          <div class="dropdown-item" onclick="showPage('subscription')">Mi suscripción</div>
-          <div class="dropdown-item" onclick="showPage('history')">Historial</div>
-          <div class="dropdown-divider"></div>
-          <div class="dropdown-item" onclick="logout()">Cerrar sesión</div>
+    </div>
+  </section>
+
+  <!-- Loading State -->
+  <section class="results-section hidden" id="loadingSection">
+    <div class="loading-container">
+      <div class="loading-spinner"></div>
+      <p class="loading-text">Analizando el mercado…</p>
+      <p class="loading-sub">Buscando productos y calculando precios óptimos</p>
+    </div>
+  </section>
+
+  <!-- Results -->
+  <section class="results-section hidden" id="resultsSection">
+    <div class="results-header">
+      <h2 class="results-title" id="resultsTitle">Resultados</h2>
+      <span class="results-count" id="resultsCount"></span>
+    </div>
+
+    <!-- Price Stats -->
+    <div class="stats-grid" id="statsGrid"></div>
+
+    <!-- AI Card -->
+    <div class="ai-panel hidden" id="aiPanel">
+      <div class="ai-panel-header">
+        <div class="ai-badge">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          Análisis de IA
         </div>
+        <span class="ai-model">DeepSeek</span>
+      </div>
+      <div class="ai-panel-body" id="aiBody"></div>
+    </div>
+
+    <!-- Products Grid -->
+    <div class="products-header">
+      <h3>Productos encontrados</h3>
+      <span class="products-sub" id="productsSub"></span>
+    </div>
+    <div class="products-grid" id="productsGrid"></div>
+
+    <!-- Generate Description -->
+    <div class="description-card hidden" id="describeCard">
+      <div class="desc-header">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+        <h3>Generar descripción profesional</h3>
+      </div>
+      <div class="desc-body">
+        <input type="text" class="desc-input" id="describeInput" placeholder="Nombre del producto para generar descripción…">
+        <button class="btn btn-secondary" id="describeBtn">Generar con IA</button>
+      </div>
+      <div class="desc-result hidden" id="describeResult"></div>
+    </div>
+  </section>
+
+  <!-- Features -->
+  <section class="features" id="featuresSection">
+    <div class="section-header">
+      <h2>Todo para vender mejor</h2>
+      <p>Herramientas profesionales para vendedores de e-commerce</p>
+    </div>
+    <div class="features-grid">
+      <div class="feature-card">
+        <div class="feature-icon-wrap purple">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+        </div>
+        <h3>Análisis en tiempo real</h3>
+        <p>Precio mínimo, máximo, promedio y mediana del mercado actualizados al instante desde Mercado Libre.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon-wrap indigo">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+        </div>
+        <h3>Recomendación con IA</h3>
+        <p>DeepSeek analiza la competencia y te sugiere el precio óptimo con explicación detallada.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon-wrap cyan">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+        </div>
+        <h3>Descripciones automáticas</h3>
+        <p>Genera títulos y descripciones profesionales para tus publicaciones en segundos.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon-wrap amber">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+        </div>
+        <h3>Múltiples mercados</h3>
+        <p>Argentina, México, Chile, Brasil, Uruguay — analiza cualquier mercado de Latinoamérica.</p>
       </div>
     </div>
-  </nav>
+  </section>
 
-  <!-- Pages -->
-  <!-- HOME -->
-  <main class="page active" id="page-home">
-    <section class="hero">
-      <div class="hero-badge">🔍 Precios inteligentes · IA</div>
-      <h1 class="hero-title">Analiza precios de<br>Mercado Libre con IA</h1>
-      <p class="hero-subtitle">Busca productos, compara precios, y obtén recomendaciones<br>basadas en análisis de datos en tiempo real.</p>
-      <div class="search-box">
-        <span class="search-icon">⌕</span>
-        <input type="text" class="search-input" id="searchInput" placeholder="Buscar producto... ej: iPhone 15, zapatillas Nike, MacBook Pro" autocomplete="off">
-        <button class="btn btn-primary search-btn" id="searchBtn">Analizar</button>
+  <footer class="footer">
+    <div class="footer-inner">
+      <div class="footer-brand">
+        <span class="brand-text">ML<span class="brand-accent">Precios</span></span>
+        <p>Inteligencia de precios para vendedores de Latinoamérica.</p>
       </div>
-      <div class="search-tips">
-        <span class="tip-label">Popular:</span>
-        <button class="tip-btn" data-q="iPhone 15">iPhone 15</button>
-        <button class="tip-btn" data-q="Samsung Galaxy S24">Samsung S24</button>
-        <button class="tip-btn" data-q="AirPods Pro">AirPods Pro</button>
-        <button class="tip-btn" data-q="MacBook Pro M3">MacBook M3</button>
-        <button class="tip-btn" data-q="PlayStation 5">PS5</button>
-      </div>
-    </section>
-
-    <!-- Search Results -->
-    <section class="results-section hidden" id="resultsSection">
-      <!-- Stats Bar -->
-      <div class="stats-bar" id="statsBar"></div>
-
-      <!-- AI Analysis -->
-      <div class="ai-card hidden" id="aiCard">
-        <div class="ai-header">
-          <span class="ai-icon">🤖</span>
-          <span>Análisis de IA</span>
-        </div>
-        <div class="ai-body" id="aiBody"></div>
-      </div>
-
-      <!-- Products Grid -->
-      <div class="products-grid" id="productsGrid"></div>
-    </section>
-
-    <section class="features-section" id="featuresSection">
-      <h2 class="section-title">Todo lo que necesitas para vender mejor</h2>
-      <div class="features-grid">
-        <div class="feature-card">
-          <div class="feature-icon">📊</div>
-          <h3>Análisis de precios</h3>
-          <p>Precio mínimo, máximo, promedio y mediana del mercado en tiempo real.</p>
-        </div>
-        <div class="feature-card">
-          <div class="feature-icon">🤖</div>
-          <h3>Recomendación IA</h3>
-          <p>DeepSeek analiza la competencia y sugiere el precio óptimo para tu producto.</p>
-        </div>
-        <div class="feature-card">
-          <div class="feature-icon">📝</div>
-          <h3>Descripciones automáticas</h3>
-          <p>Genera descripciones profesionales para tus publicaciones con IA.</p>
-        </div>
-        <div class="feature-card">
-          <div class="feature-icon">📈</div>
-          <h3>Múltiples categorías</h3>
-          <p>Busca en cualquier categoría de Mercado Libre Argentina, México, Chile y más.</p>
-        </div>
-      </div>
-    </section>
-
-    <footer class="footer">
-      <p>ML Precios © 2026 · Hecho con ❤️ para vendedores de Latinoamérica</p>
-    </footer>
-  </main>
-
-  <!-- PRICING -->
-  <main class="page" id="page-pricing">
-    <div class="page-header">
-      <h1>Planes y precios</h1>
-      <p>Elige el plan que mejor se adapte a tu negocio</p>
-    </div>
-    <div class="pricing-grid" id="pricingGrid">
-      <div class="pricing-card free">
-        <h3>Gratis</h3>
-        <div class="price">$0<span>/mes</span></div>
-        <ul class="price-features">
-          <li>3 búsquedas por día</li>
-          <li>Análisis básico de precios</li>
-          <li>Soporte por email</li>
-        </ul>
-        <button class="btn btn-ghost" style="width:100%" onclick="showAuth()">Comenzar gratis</button>
+      <div class="footer-links">
+        <a href="#" data-page="pricing">Planes</a>
+        <a href="#">Términos</a>
+        <a href="#">Privacidad</a>
       </div>
     </div>
-  </main>
+    <div class="footer-bottom">
+      <p>© 2026 ML Precios. Todos los derechos reservados.</p>
+    </div>
+  </footer>
+</main>
 
-  <!-- SUBSCRIPTION -->
-  <main class="page" id="page-subscription">
-    <div class="page-header">
-      <h1>Mi suscripción</h1>
-    </div>
-    <div class="sub-card" id="subCard"></div>
-  </main>
+<!-- ========== PAGE: PRICING ========== -->
+<main class="page" id="page-pricing">
+  <div class="page-hero">
+    <h1 class="gradient-text">Planes y precios</h1>
+    <p>Elige el plan perfecto para tu negocio. Sin costos ocultos.</p>
+  </div>
+  <div class="pricing-grid" id="pricingGrid"></div>
+</main>
 
-  <!-- HISTORY -->
-  <main class="page" id="page-history">
-    <div class="page-header">
-      <h1>Historial de pagos</h1>
-    </div>
-    <div class="history-list" id="historyList">
-      <p class="empty-state">No hay pagos registrados.</p>
-    </div>
-  </main>
+<!-- ========== PAGE: SUBSCRIPTION ========== -->
+<main class="page" id="page-subscription">
+  <div class="sub-layout" id="subContent">
+    <div class="loading-container"><div class="loading-spinner"></div><p>Cargando suscripción…</p></div>
+  </div>
+</main>
 
-  <!-- ADMIN -->
-  <main class="page" id="page-admin">
-    <div class="page-header">
-      <h1>Panel de administración</h1>
-    </div>
-    <div class="admin-grid">
-      <div class="admin-section" id="adminStats"></div>
-      <div class="admin-section" id="adminUsers"></div>
-    </div>
-  </main>
-</div>
+<!-- ========== PAGE: HISTORY ========== -->
+<main class="page" id="page-history">
+  <div class="page-hero">
+    <h1>Historial de pagos</h1>
+  </div>
+  <div class="history-list" id="historyList">
+    <div class="loading-container"><div class="loading-spinner"></div><p>Cargando historial…</p></div>
+  </div>
+</main>
 
-<!-- Auth Modal -->
+<!-- ========== PAGE: ADMIN ========== -->
+<main class="page" id="page-admin">
+  <div class="admin-layout">
+    <aside class="admin-sidebar">
+      <h3>Administración</h3>
+      <a class="admin-tab active" data-admin="dashboard">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+        Dashboard
+      </a>
+      <a class="admin-tab" data-admin="plans">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+        Planes
+      </a>
+      <a class="admin-tab" data-admin="users">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        Usuarios
+      </a>
+      <a class="admin-tab" data-admin="settings">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        Configuración
+      </a>
+    </aside>
+    <div class="admin-main" id="adminMain">
+      <div class="loading-container"><div class="loading-spinner"></div><p>Cargando panel…</p></div>
+    </div>
+  </div>
+</main>
+
+<!-- ========== AUTH MODAL ========== -->
 <div class="modal-overlay hidden" id="authModal">
-  <div class="modal" onclick="event.stopPropagation()">
-    <button class="modal-close" onclick="hideAuth()">✕</button>
+  <div class="modal">
+    <button class="modal-close" onclick="hideAuth()">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+    <div class="modal-brand">
+      <svg width="32" height="32" viewBox="0 0 24 24" fill="none">
+        <rect x="2" y="2" width="20" height="20" rx="5" fill="url(#brandGrad)"/>
+        <path d="M7 16L12 7L17 16" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </div>
     <div class="modal-tabs">
       <button class="modal-tab active" data-tab="login">Iniciar sesión</button>
-      <button class="modal-tab" data-tab="register">Registrarse</button>
+      <button class="modal-tab" data-tab="register">Crear cuenta</button>
     </div>
-    <div class="modal-body">
-      <div class="auth-form active" id="loginForm">
-        <div class="field">
-          <label>Email</label>
-          <input type="email" class="input" id="loginEmail" placeholder="tu@email.com">
-        </div>
-        <div class="field">
-          <label>Contraseña</label>
-          <input type="password" class="input" id="loginPass" placeholder="••••••••">
-        </div>
-        <div class="form-error" id="loginError"></div>
-        <button class="btn btn-primary" style="width:100%" onclick="doLogin()">Iniciar sesión</button>
+
+    <!-- Login Form -->
+    <form class="auth-form active" id="loginForm" onsubmit="event.preventDefault(); doLogin();">
+      <div class="field">
+        <label>Email</label>
+        <input type="email" id="loginEmail" placeholder="tu@email.com" required>
       </div>
-      <div class="auth-form" id="registerForm">
-        <div class="field">
-          <label>Nombre</label>
-          <input type="text" class="input" id="regName" placeholder="Tu nombre">
-        </div>
-        <div class="field">
-          <label>Email</label>
-          <input type="email" class="input" id="regEmail" placeholder="tu@email.com">
-        </div>
-        <div class="field">
-          <label>Contraseña</label>
-          <input type="password" class="input" id="regPass" placeholder="••••••••">
-        </div>
-        <div class="form-error" id="regError"></div>
-        <button class="btn btn-primary" style="width:100%" onclick="doRegister()">Crear cuenta</button>
+      <div class="field">
+        <label>Contraseña</label>
+        <input type="password" id="loginPass" placeholder="••••••••" required>
       </div>
-    </div>
+      <p class="form-error hidden" id="loginError"></p>
+      <button type="submit" class="btn btn-primary btn-full">Iniciar sesión</button>
+    </form>
+
+    <!-- Register Form -->
+    <form class="auth-form" id="registerForm" onsubmit="event.preventDefault(); doRegister();">
+      <div class="field">
+        <label>Nombre</label>
+        <input type="text" id="regName" placeholder="Tu nombre" required>
+      </div>
+      <div class="field">
+        <label>Email</label>
+        <input type="email" id="regEmail" placeholder="tu@email.com" required>
+      </div>
+      <div class="field">
+        <label>Contraseña</label>
+        <input type="password" id="regPass" placeholder="Mínimo 6 caracteres" required>
+      </div>
+      <p class="form-error hidden" id="regError"></p>
+      <button type="submit" class="btn btn-primary btn-full">Crear cuenta</button>
+    </form>
   </div>
 </div>
 
