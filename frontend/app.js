@@ -2,7 +2,14 @@
    ML Precios — Application Logic
    ═══════════════════════════════════════════════════════════ */
 
-const API = '/api';
+// API base — auto-detect: Vercel uses remote server, local uses relative
+const API = (() => {
+  const host = window.location.hostname;
+  if (host.includes('vercel.app') || host.includes('ml-pricing')) {
+    return 'http://159.75.27.216:8080/api';
+  }
+  return '/api';
+})();
 let TOKEN = localStorage.getItem('ml_token') || '';
 let USER = null;
 let PLANS = [];

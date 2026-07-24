@@ -16,6 +16,7 @@ from database import (
 from auth import hash_password, verify_password, create_access_token, decode_token
 from crawler import search_products
 from ai_analysis import analyze_pricing, generate_description
+from payment import mp_create_checkout, stripe_create_checkout
 
 app = FastAPI(title="ML Precios v2", version="2.0")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True,
@@ -133,8 +134,22 @@ def checkout(data: dict, user=Depends(require_user)):
     plan = get_plan(data.get("plan_id", ""))
     if not plan or not plan.get("enabled"):
         raise HTTPException(400, "套餐不存在或已停用")
-    # 暂无在线支付，返回计划信息
-    return {"checkout_url": None, "plan": plan["name"], "amount": plan["price_monthly"], "message": "在线支付待配置，请联系管理员"}
+    provider = data.get("provider", "mercadopago")
+    is_yearly = data.get("is_yearly", False)
+
+    checkout_url = None
+    if provider == "stripe":
+        checkout_url = stripe_create_checkout(plan, user, is_yearly)
+    else:
+        checkout_url = mp_create_checkout(plan, user, is_yearly)
+
+    return {
+        "checkout_url": checkout_url,
+        "plan": plan["name"],
+        "amount": plan["price_yearly"] if is_yearly else plan["price_monthly"],
+        "provider": provider,
+        "message": "Redirigiendo al pago..." if checkout_url else "支付网关未配置，请联系管理员"
+    }
 
 @app.get("/api/payment/history")
 def payment_history(user=Depends(require_user)):
@@ -177,11 +192,11 @@ def admin_set_setting(data: dict, admin=Depends(require_admin)):
 @app.get("/api/search")
 def search(q: str = Query(...), site: str = Query("MLA"), user=Depends(get_current_user)):
     if not user:
-        return JSONResponse(402, {"error":"usage_limit","message":"请先登录","need_payment":True})
+        return JSONResponse(content={"error":"usage_limit","message":"请先登录","need_payment":True}, status_code=402)
     
     allowed, msg, remain = check_usage(user)
     if not allowed:
-        return JSONResponse(402, {"error":"usage_limit","message":msg,"need_payment":True})
+        return JSONResponse(content={"error":"usage_limit","message":msg,"need_payment":True}, status_code=402)
     
     products = search_products(q, site=site)
     if not products:
@@ -217,7 +232,26 @@ def describe(title: str = Query(...), price: float = Query(0), currency: str = Q
 def health():
     return {"status": "ok", "version": "2.0"}
 
+
+# ─── 支付 Webhook ─────────────────────────────────────────
+
+@app.post("/api/payment/mp/webhook")
+async def mp_webhook(request: Request):
+    from payment import mp_handle_webhook
+    body = await request.json()
+    result = mp_handle_webhook(body)
+    return {"ok": result}
+
+@app.post("/api/payment/stripe/webhook")
+async def stripe_webhook(request: Request):
+    from payment import stripe_handle_webhook
+    payload = await request.body()
+    sig = request.headers.get("stripe-signature", "")
+    result = stripe_handle_webhook(payload, sig)
+    return {"ok": result}
+
 # ─── 静态文件（前端）────────────────────────────────────
+
 
 FRONTEND_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "frontend")
 if os.path.isdir(FRONTEND_DIR):
