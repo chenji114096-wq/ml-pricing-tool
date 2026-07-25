@@ -22,7 +22,7 @@ from payment import mp_create_checkout, stripe_create_checkout
 app = FastAPI(title="ML Precios v2", version="2.0")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True,
                    allow_methods=["*"], allow_headers=["*"])
-DEEPSEEK_API_KEY = "sk-9b6d3ed3edb84fc9b56abc297ae1610c"
+DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY", "")
 # ─── 可配置限额（可通过环境变量覆盖）─────────────
 ANON_DAILY = int(os.environ.get("ANON_DAILY_LIMIT", "3"))
 ANON_TOTAL = int(os.environ.get("ANON_TOTAL_LIMIT", "100"))
