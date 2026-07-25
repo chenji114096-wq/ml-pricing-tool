@@ -18,10 +18,6 @@ def analyze_pricing(products: List[Product], stats: PriceStats, api_key: str = N
     """
     key = api_key or DEEPSEEK_API_KEY
 
-    if not key or key == "***":
-        print("[AI] DeepSeek API Key 未配置，使用规则引擎")
-        return _rule_based_analysis(products, stats)
-
     try:
         return _deepseek_analysis(products, stats, key)
     except Exception as e:
@@ -29,17 +25,26 @@ def analyze_pricing(products: List[Product], stats: PriceStats, api_key: str = N
         return _rule_based_analysis(products, stats)
 
 
+
+_desc_cache = {}
+
 def generate_description(product_title: str, price: float, currency: str,
                          features: List[str] = None, api_key: str = None) -> str:
     """用 AI 生成西语商品描述"""
+    cache_key = f"{product_title}_{price}_{currency}"
+    if cache_key in _desc_cache:
+        return _desc_cache[cache_key]
+    
     key = api_key or DEEPSEEK_API_KEY
-
-    if not key or key == "***":
+    if not key:
         return _template_description(product_title, price, currency, features)
-
     try:
-        return _deepseek_description(product_title, price, currency, features, key)
-    except:
+        result = _deepseek_description(product_title, price, currency, features, key)
+        if result:
+            _desc_cache[cache_key] = result
+        return result
+    except Exception as e:
+        print(f"[DESC ERROR] {e}")
         return _template_description(product_title, price, currency, features)
 
 

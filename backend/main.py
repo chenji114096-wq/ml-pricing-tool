@@ -22,7 +22,7 @@ from payment import mp_create_checkout, stripe_create_checkout
 app = FastAPI(title="ML Precios v2", version="2.0")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True,
                    allow_methods=["*"], allow_headers=["*"])
-DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY", "")
+DEEPSEEK_API_KEY = "sk-9b6d3ed3edb84fc9b56abc297ae1610c"
 # ─── 可配置限额（可通过环境变量覆盖）─────────────
 ANON_DAILY = int(os.environ.get("ANON_DAILY_LIMIT", "3"))
 ANON_TOTAL = int(os.environ.get("ANON_TOTAL_LIMIT", "100"))
@@ -285,20 +285,14 @@ def search(q: str = Query(...), site: str = Query("MLA"), user=Depends(get_curre
 @app.get("/api/describe")
 def describe(title: str = Query(...), price: float = Query(0), currency: str = Query("ARS"),
              features: Optional[str] = Query(None), user=Depends(require_user)):
-    # Description limits per plan
-    desc_limits = {"free": 1, "pro": 50, "enterprise": 100, "professional": 500}
-    sub = get_sub(user["id"])
-    plan_slug = sub.get("plan", {}).get("slug", "free") if sub else "free"
-    limit = desc_limits.get(plan_slug, 0)
-    if limit > 0:
-        start = __import__("datetime").datetime.utcnow().replace(day=1, hour=0, minute=0, second=0)
-        used = get_usage(user["id"], "describe", start)
-        if used >= limit:
-            raise HTTPException(402, f"描述额度用完（{used}/{limit}），升级套餐解锁更多")
+    allowed, msg, remain = check_usage(user)
+    if not allowed:
+        raise HTTPException(402, msg)
+
     
     feat_list = [f.strip() for f in features.split(",")] if features else []
     desc = generate_description(title, price, currency, feat_list, api_key=DEEPSEEK_API_KEY)
-    add_usage(user["id"], "describe")
+    add_usage(user["id"], "search")
     return {"title": title, "description_es": desc}
 
 @app.post("/api/share/bonus")
