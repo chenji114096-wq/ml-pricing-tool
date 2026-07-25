@@ -310,16 +310,22 @@ async function loadAIAsync(query, site) {
 }
 async function generateDescription() {
   const title = $('describeInput').value.trim();
-  if (!title) return;
-  $('describeBtn').textContent = 'Generando…';
+  if (!title) { show($('describeResult')); $('describeResult').textContent = 'Ingresa un producto'; return; }
+  $('describeBtn').textContent = 'Generando...';
   $('describeBtn').disabled = true;
-  hide($('describeResult'));
-  const data = await api('GET', `/describe?title=${encodeURIComponent(title)}`);
-  $('describeBtn').textContent = 'Generar con IA';
-  $('describeBtn').disabled = false;
-  if (data.description_es || data.description || data.result) {
-    show($('describeResult'));
-    $('describeResult').textContent = data.description_es || data.description || data.result;
+  show($('describeResult'));
+  $('describeResult').textContent = 'DeepSeek generando...';
+  try {
+    const data = await api('GET', '/describe?title=' + encodeURIComponent(title));
+    $('describeBtn').textContent = 'Generar con IA';
+    $('describeBtn').disabled = false;
+    const text = data.description_es || data.description || data.result;
+    if (text) $('describeResult').textContent = text;
+    else $('describeResult').textContent = 'No se pudo generar. Intenta de nuevo.';
+  } catch(e) {
+    $('describeBtn').textContent = 'Generar con IA';
+    $('describeBtn').disabled = false;
+    $('describeResult').textContent = 'Error de conexion';
   }
 }
 
@@ -344,12 +350,14 @@ async function loadPricingPage() {
   grid.innerHTML = PLANS.map((plan, i) => {
     const price = plan.price_monthly || 0;
     const featured = price > 0 && i === PLANS.findIndex(p => p.price_monthly > 0);
-    const features = [
-      `${plan.search_limit_monthly && plan.search_limit_monthly > 0 ? plan.search_limit_monthly.toLocaleString() : 'Ilimitadas'} búsquedas/mes`,
-      'Análisis de IA',
-      'Descripciones automáticas',
-      plan.slug === 'pro' ? 'Soporte prioritario' : 'Soporte por email',
-    ];
+    const planFeatures = {
+      'free': ['90 búsquedas/mes', 'Análisis básico de precios', 'Soporte por email'],
+      'pro': ['500 búsquedas/mes', 'Análisis de IA (DeepSeek)', 'Descripciones automáticas', 'Soporte prioritario'],
+      'empresa': ['Búsquedas ilimitadas', 'Análisis de IA avanzado', 'Descripciones automáticas', 'Soporte prioritario', 'Exportación CSV'],
+      'professional': ['Búsquedas ilimitadas', 'IA + Descripciones premium', 'Soporte dedicado 24/7', 'Exportación CSV + PDF', 'Seguimiento de competidores', 'Acceso API'],
+      'pay_per_search': ['Pago por búsqueda', 'Análisis de IA', 'Soporte por email'],
+    };
+    const features = planFeatures[plan.slug] || planFeatures['free'];
 
     return `
       <div class="pricing-card ${featured ? 'featured' : ''}">
