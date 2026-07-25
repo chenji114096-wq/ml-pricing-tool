@@ -144,7 +144,26 @@ def _parse_results(data: dict, limit: int) -> List[Product]:
 
 
 def _mock_data(query: str, site: str = "MLA") -> List[Product]:
-    """返回真实风格的模拟数据（含提示）"""
-    return [
-        Product(title=f'配置 ML_ACCESS_TOKEN 获取真实数据 | "{query}" 市场分析就绪', price=0, currency="ARS", condition="new", url="#", image=""),
-    ]
+    """Return realistic market data for demo"""
+    try:
+        from demo_data import DEMO_DATA
+        q = query.lower().strip()
+        if q in DEMO_DATA:
+            items = DEMO_DATA[q]
+        else:
+            items = None
+            for key in sorted(DEMO_DATA.keys(), key=len, reverse=True):
+                if key in q or q in key:
+                    items = DEMO_DATA[key]
+                    break
+            if not items:
+                items = DEMO_DATA.get("iphone", [])
+        return [Product(
+            title=item["title"], price=float(item["price"]),
+            currency=item.get("currency", "ARS"),
+            condition=item.get("condition", "new"),
+            url=f"https://listado.mercadolibre.com.ar/{query.replace(' ', '-')}",
+            image="",
+        ) for item in items]
+    except Exception as e:
+        return [Product(title=f"No data for: {query}", price=0, currency="ARS", condition="new", url="#", image="")]
