@@ -40,7 +40,7 @@ def generate_description(product_title: str, price: float, currency: str,
         return _template_description(product_title, price, currency, features)
     try:
         result = _deepseek_description(product_title, price, currency, features, key)
-        if result:
+        if result and len(result) > 20:
             _desc_cache[cache_key] = result
         return result
     except Exception as e:
