@@ -334,9 +334,9 @@ async function generateDescription() {
   const data = await api('GET', `/describe?title=${encodeURIComponent(title)}`);
   $('describeBtn').textContent = 'Generar con IA';
   $('describeBtn').disabled = false;
-  if (data.description || data.result) {
+  if (data.description_es || data.description || data.result) {
     show($('describeResult'));
-    $('describeResult').textContent = data.description || data.result;
+    $('describeResult').textContent = data.description_es || data.description || data.result;
   }
 }
 
