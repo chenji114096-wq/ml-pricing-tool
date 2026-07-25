@@ -288,8 +288,6 @@ def describe(title: str = Query(...), price: float = Query(0), currency: str = Q
     allowed, msg, remain = check_usage(user)
     if not allowed:
         raise HTTPException(402, msg)
-
-    
     feat_list = [f.strip() for f in features.split(",")] if features else []
     desc = generate_description(title, price, currency, feat_list, api_key=DEEPSEEK_API_KEY)
     add_usage(user["id"], "search")
