@@ -629,3 +629,4 @@ svg { flex-shrink: 0; }
   .footer-inner { flex-direction: column; gap: 20px; }
 }
 .search-clear{position:absolute;right:180px;top:50%;transform:translateY(-50%);width:22px;height:22px;border-radius:50%;background:var(--bg-tertiary);border:1px solid var(--border-primary);color:var(--text-tertiary);font-size:12px;cursor:pointer;display:none;align-items:center;justify-content:center;z-index:2;line-height:1}.search-clear.show{display:flex}.search-clear:hover{color:var(--danger)}.search-row{position:relative}
+.search-suggestions{position:absolute;top:100%;left:0;right:0;background:var(--bg2);border:1px solid var(--bor);border-radius:0 0 var(--r2) var(--r2);z-index:10;max-height:240px;overflow-y:auto;display:none}.search-suggestions.show{display:block}.ss-item{padding:10px 14px;font-size:13px;color:var(--t2);cursor:pointer;transition:.1s}.ss-item:hover{background:var(--bg3);color:var(--t1)}

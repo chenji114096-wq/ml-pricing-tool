@@ -1,3 +1,4 @@
+const API = window.location.pathname.startsWith("/ml/") ? "/ml/api" : "/api";
 let TOKEN = localStorage.getItem('ml_token') || '';
 let USER = null;
 let PLANS = [];
@@ -580,3 +581,23 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 function copyDescription(){var t=document.getElementById("describeResult");if(t&&t.textContent){navigator.clipboard.writeText(t.textContent.trim());var b=document.getElementById("copyDescBtn");b.textContent="Copiado!";setTimeout(function(){b.textContent="Copiar descripcion"},2000)}}
 function toggleClear(){document.getElementById("searchClear").classList.toggle("show",document.getElementById("searchInput").value.length>0)}function clearSearch(){var i=document.getElementById("searchInput");i.value="";document.getElementById("searchClear").classList.remove("show");i.focus()}
+
+async function autocompleteSearch() {
+  var q = document.getElementById("searchInput").value;
+  var dd = document.getElementById("searchSuggestions");
+  if (q.length < 2) { dd.classList.remove("show"); return; }
+  try {
+    var r = await fetch("https://api.mercadolibre.com/sites/" + (document.getElementById("siteSelect")?.value || "MLA") + "/autosuggest?q=" + encodeURIComponent(q));
+    var d = await r.json();
+    var items = (d.suggested_queries || []).slice(0, 8);
+    if (items.length === 0) { dd.classList.remove("show"); return; }
+    dd.innerHTML = items.map(function(i) { return "<div class=\"ss-item\" onclick=\"pickSuggestion(\"" + i.q.replace(/"/g,"&quot;") + "\")\">" + i.q + "</div>"; }).join("");
+    dd.classList.add("show");
+  } catch(e) { dd.classList.remove("show"); }
+}
+function pickSuggestion(q) {
+  document.getElementById("searchInput").value = q;
+  document.getElementById("searchSuggestions").classList.remove("show");
+  doSearch();
+}
+
