@@ -254,23 +254,6 @@ async function doSearch() {
 
   // AI Analysis - load async for speed
   loadAIAsync(q, site);
-    const riskLevels = { 'bajo': 'risk-low', 'low': 'risk-low', 'medio': 'risk-medium', 'medium': 'risk-medium', 'alto': 'risk-high', 'high': 'risk-high' };
-    const riskClass = riskLevels[data.ai.risk_level?.toLowerCase()] || 'risk-low';
-    $('aiBody').innerHTML = `
-      <div class="ai-suggested">${data.ai.currency || '$'} ${data.ai.suggested_price?.toLocaleString() || data.ai.suggested_price}</div>
-      <div class="ai-reason">${data.ai.reason || 'Análisis completado.'}</div>
-      <div class="ai-meta">
-        <span class="ai-tag ${riskClass}">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-          Riesgo ${data.ai.risk_level || 'N/A'}
-        </span>
-        ${data.ai.competitor_insight ? `<span class="ai-tag insight">💡 ${data.ai.competitor_insight}</span>` : ''}
-      </div>
-    `;
-  } else {
-    hide($('aiPanel'));
-  }
-
   // Products
   $('productsSub').textContent = `Mostrando ${Math.min(data.products.length, 20)} productos`;
   $('productsGrid').innerHTML = data.products.map(p => `
