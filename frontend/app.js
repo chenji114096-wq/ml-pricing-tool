@@ -351,11 +351,11 @@ async function loadPricingPage() {
     const price = plan.price_monthly || 0;
     const featured = price > 0 && i === PLANS.findIndex(p => p.price_monthly > 0);
     const planFeatures = {
-      'free': ['90 búsquedas/mes', 'Análisis básico de precios', 'Soporte por email'],
-      'pro': ['500 búsquedas/mes', 'Análisis de IA (DeepSeek)', 'Descripciones automáticas', 'Soporte prioritario'],
-      'empresa': ['Búsquedas ilimitadas', 'Análisis de IA avanzado', 'Descripciones automáticas', 'Soporte prioritario', 'Exportación CSV'],
-      'professional': ['Búsquedas ilimitadas', 'IA + Descripciones premium', 'Soporte dedicado 24/7', 'Exportación CSV + PDF', 'Seguimiento de competidores', 'Acceso API'],
-      'pay_per_search': ['Pago por búsqueda', 'Análisis de IA', 'Soporte por email'],
+      'free': ['10 busquedas/dia (300/mes)', 'AI analisis de precios', '1 descripcion IA gratuita', 'Soporte por email'],
+      'pro': ['500 busquedas/mes', 'AI analisis (DeepSeek)', '50 descripciones IA/mes', 'Soporte prioritario'],
+      'empresa': ['Busquedas ilimitadas', 'AI analisis avanzado', '100 descripciones IA/mes', 'Soporte prioritario', 'Exportacion CSV'],
+      'professional': ['Busquedas ilimitadas', 'IA + descripciones premium', '200 descripciones IA/mes', 'Soporte dedicado 24/7', 'CSV + PDF', 'Seguimiento competidores'],
+      'pay_per_search': ['Pago por busqueda', 'Analisis de IA', 'Soporte por email'],
     };
     const features = planFeatures[plan.slug] || planFeatures['free'];
 

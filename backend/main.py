@@ -26,6 +26,7 @@ DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY", "")
 # ─── 匿名用户试用追踪（IP累计：50次）─────────────
 from collections import defaultdict
 _anon_usage = defaultdict(int)
+_anon_daily = defaultdict(lambda: defaultdict(int))
 
 def check_anon_usage(ip: str):
     used = _anon_usage[ip]
@@ -213,7 +214,8 @@ def search(q: str = Query(...), site: str = Query("MLA"), user=Depends(get_curre
         allowed, msg = check_anon_usage(client_ip)
         if not allowed:
             return JSONResponse(content={"error":"usage_limit","message":msg,"need_payment":True}, status_code=402)
-        remain = 100 - _anon_usage[client_ip]
+        today = __import__("datetime").date.today().isoformat()
+        remain = 3 - _anon_daily[client_ip].get(today, 0)
     
     products = search_products(q, site=site)
     if not products:
@@ -235,7 +237,9 @@ def search(q: str = Query(...), site: str = Query("MLA"), user=Depends(get_curre
         add_usage(user["id"], "search")
     else:
         client_ip = request.client.host if request.client else "unknown"
+        today = __import__("datetime").date.today().isoformat()
         _anon_usage[client_ip] += 1
+        _anon_daily[client_ip][today] = _anon_daily[client_ip].get(today, 0) + 1
     # 利润计算：对每个产品算到手价+利润率
     products_with_profit = []
     for p in products[:20]:
@@ -273,17 +277,17 @@ def search(q: str = Query(...), site: str = Query("MLA"), user=Depends(get_curre
 
 @app.get("/api/describe")
 def describe(title: str = Query(...), price: float = Query(0), currency: str = Query("ARS"),
-             features: Optional[str] = Query(None)):
+             features: Optional[str] = Query(None), user=Depends(require_user)):
     feat_list = [f.strip() for f in features.split(",")] if features else []
     desc = generate_description(title, price, currency, feat_list, api_key=DEEPSEEK_API_KEY)
-    # anonymous describe
+    add_usage(user["id"], "describe")
     return {"title": title, "description_es": desc}
 
 @app.post("/api/share/bonus")
 async def share_bonus(request: Request):
     ip = request.client.host if request.client else "unknown"
     current = _anon_usage[ip]
-    if current >= 100:
+    if current >= 10:
         return {"ok": False, "message": "Max 100"}
     _anon_usage[ip] = max(0, current - 50)
     remaining = 100 - _anon_usage[ip]
