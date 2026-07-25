@@ -202,7 +202,8 @@ async function doSearch() {
   hide($('loadingSection'));
 
   if (data.status === 402 || data.error === 'usage_limit') {
-    showPage('pricing');
+    if (!USER) { showAuth(); return; }
+    showUpgradeModal(data.message || 'Limite alcanzado');
     return;
   }
 
