@@ -586,3 +586,4 @@ document.addEventListener('DOMContentLoaded', async () => {
   updateHeader();
   if (currentPage === 'pricing') loadPricingPage();
 });
+function copyDescription(){var t=document.getElementById("describeResult");if(t&&t.textContent){navigator.clipboard.writeText(t.textContent.trim());var b=document.getElementById("copyDescBtn");b.textContent="Copiado!";setTimeout(function(){b.textContent="Copiar descripcion"},2000)}}
