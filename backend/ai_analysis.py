@@ -89,7 +89,7 @@ Responde en español con:
             "Content-Type": "application/json",
         },
         json={
-            "model": "deepseek-v4-flash",
+            "model": "deepseek-chat",
             "messages": [{"role": "user", "content": prompt}],
             "temperature": 0.3,
             "max_tokens": 200,
@@ -160,7 +160,7 @@ Requisitos:
             "Content-Type": "application/json",
         },
         json={
-            "model": "deepseek-v4-flash",
+            "model": "deepseek-chat",
             "messages": [{"role": "user", "content": prompt}],
             "temperature": 0.7,
             "max_tokens": 200,
