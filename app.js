@@ -252,9 +252,8 @@ async function doSearch() {
     `;
   }
 
-  // AI Analysis
-  if (data.ai && data.ai.suggested_price) {
-    show($('aiPanel'));
+  // AI Analysis - load async for speed
+  loadAIAsync(q, site);
     const riskLevels = { 'bajo': 'risk-low', 'low': 'risk-low', 'medio': 'risk-medium', 'medium': 'risk-medium', 'alto': 'risk-high', 'high': 'risk-high' };
     const riskClass = riskLevels[data.ai.risk_level?.toLowerCase()] || 'risk-low';
     $('aiBody').innerHTML = `
@@ -304,6 +303,28 @@ async function doSearch() {
 $('describeBtn')?.addEventListener('click', generateDescription);
 $('describeInput')?.addEventListener('keydown', e => { if (e.key === 'Enter') generateDescription(); });
 
+
+async function loadAIAsync(query, site) {
+  // Show loading state in AI panel
+  show($('aiPanel'));
+  $('aiBody').innerHTML = '<div class="ai-loading"><span class="ai-dot"></span>DeepSeek analizando el mercado...</div>';
+  
+  try {
+    // Use a separate lightweight AI-only endpoint
+    const res = await fetch(API + '/ai/analyze?q=' + encodeURIComponent(query) + '&site=' + site);
+    const aiData = await res.json();
+    
+    if (aiData.suggested_price) {
+      const riskLevels = { 'bajo': 'risk-low', 'low': 'risk-low', 'medio': 'risk-medium', 'medium': 'risk-medium', 'alto': 'risk-high', 'high': 'risk-high' };
+      const riskClass = riskLevels[aiData.risk_level?.toLowerCase()] || 'risk-low';
+      $('aiBody').innerHTML = '<div class="ai-suggested">' + (aiData.currency || '$') + ' ' + (aiData.suggested_price?.toLocaleString() || aiData.suggested_price) + '</div><div class="ai-reason">' + (aiData.reason || 'Analisis completado.') + '</div><div class="ai-meta"><span class="ai-tag ' + riskClass + '">Riesgo ' + (aiData.risk_level || 'N/A') + '</span>' + (aiData.competitor_insight ? '<span class="ai-tag insight">' + aiData.competitor_insight + '</span>' : '') + '</div>';
+    } else {
+      hide($('aiPanel'));
+    }
+  } catch(e) {
+    hide($('aiPanel'));
+  }
+}
 async function generateDescription() {
   const title = $('describeInput').value.trim();
   if (!title) return;

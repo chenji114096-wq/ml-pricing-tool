@@ -289,6 +289,41 @@ async def share_bonus(request: Request):
     remaining = 100 - _anon_usage[ip]
     return {"ok": True, "bonus": 50, "remaining": remaining}
 
+
+@app.get("/api/ai/analyze")
+def ai_analyze(q: str = Query(...), site: str = Query("MLA")):
+    import statistics
+    from crawler import search_products
+    from models import PriceStats
+    
+    products = search_products(q, site=site, limit=20)
+    if not products:
+        return {"error": "no products"}
+    
+    prices = [p.price for p in products if p.price > 0]
+    if not prices:
+        return {"error": "no valid prices"}
+    
+    stats = PriceStats(
+        min_price=min(prices), max_price=max(prices),
+        avg_price=round(statistics.mean(prices), 2),
+        median_price=round(statistics.median(prices), 2),
+        total_listings=len(prices),
+        price_range=f"${min(prices):,.0f} - ${max(prices):,.0f}"
+    )
+    
+    from ai_analysis import analyze_pricing
+    ai_data = analyze_pricing(products, stats, api_key=DEEPSEEK_API_KEY)
+    
+    return {
+        "suggested_price": ai_data.suggested_price,
+        "reason": ai_data.reason,
+        "risk_level": ai_data.risk_level,
+        "competitor_insight": ai_data.competitor_insight,
+        "currency": products[0].currency if products else "ARS",
+    }
+
+
 @app.get("/api/health")
 def health():
     return {"status": "ok", "version": "2.0"}
