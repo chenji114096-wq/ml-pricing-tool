@@ -36,8 +36,8 @@ async function api(method, path, body) {
   try {
     const res = await fetch(API + path, opts);
     if (res.status === 401) { TOKEN = ''; localStorage.removeItem('ml_token'); USER = null; updateHeader(); }
-    const data = await res.json();
-    return { ok: res.ok, status: res.status, ...data };
+    const json = await res.json();
+    const result = Array.isArray(json) ? json : { ok: res.ok, status: res.status, ...json }; return result;
   } catch (e) {
     return { ok: false, error: 'Error de conexión' };
   }
