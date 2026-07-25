@@ -1,23 +1,3 @@
-
-function showUpgradeModal(msg) {
-  var m = document.getElementById('upgradeModal');
-  if (!m) { m = document.createElement('div'); m.className = 'modal-overlay'; m.id = 'upgradeModal';
-    m.innerHTML = '<div class="modal" style="text-align:center"><div style="font-size:40px;margin-bottom:8px">🚀</div><h2>Límite alcanzado</h2><p id="upgradeMsg" style="color:var(--text-tertiary);margin-bottom:16px"></p><button class="btn btn-primary btn-full" onclick="showPage('pricing');hideUpgrade()">Ver planes</button><button class="btn btn-ghost btn-full" style="margin-top:8px" onclick="showAuth();hideUpgrade()">Iniciar sesión</button></div>';
-    m.addEventListener('click', function(e){ if(e.target===m) hideUpgrade(); });
-    document.body.appendChild(m);
-  }
-  document.getElementById('upgradeMsg').textContent = msg || 'Has alcanzado el límite gratuito.';
-  m.classList.remove('hidden');
-}
-function hideUpgrade(){ var m = document.getElementById('upgradeModal'); if(m) m.classList.add('hidden'); }
-
-/* ═══════════════════════════════════════════════════════════
-   ML Precios — Application Logic
-   ═══════════════════════════════════════════════════════════ */
-
-// API base — works both locally (direct) and on Vercel (proxy to server)
-// API base — detect context: /ml/ on nginx, direct on Vercel/local
-const API = window.location.pathname.startsWith('/ml/') ? '/ml/api' : '/api';
 let TOKEN = localStorage.getItem('ml_token') || '';
 let USER = null;
 let PLANS = [];
