@@ -58,12 +58,25 @@ def get_stats():
     def count(t, f=""): 
         c = api("GET", t, f"?select=count{f}")
         return c[0]["count"] if c else 0
+    def today_count(t, f=""):
+        from datetime import date
+        today = date.today().isoformat()
+        c = api("GET", t, f"?select=count&created_at=gte.{today}{f}")
+        return c[0]["count"] if c else 0
     return {
         "total_users": count("users"),
         "active_subs": count("user_subscriptions", "&status=eq.active"),
         "total_searches": count("usage_records", "&action=eq.search"),
+        "total_descriptions": count("usage_records", "&action=eq.describe"),
+        "today_searches": today_count("usage_records", "&action=eq.search"),
+        "today_descriptions": today_count("usage_records", "&action=eq.describe"),
         "total_payments": count("payment_records", "&status=eq.completed"),
+        "revenue": sum_payments(),
     }
+
+def sum_payments():
+    ps = api("GET", "payment_records", "?status=eq.completed&select=amount")
+    return round(sum(float(p.get("amount",0)) for p in (ps if isinstance(ps,list) else [])), 2)
 
 
 def create_payment(user_id, plan_id, provider, amount, currency, status, provider_payment_id, provider_data=None):

@@ -480,12 +480,17 @@ async function loadAdminPanel() {
   if (adminTab === 'dashboard') {
     const stats = await api('GET', '/admin/stats');
     main.innerHTML = `
-      <h2 style="font-size:20px;font-weight:700;margin-bottom:20px">Dashboard</h2>
+      <h2 style="font-size:20px;font-weight:700;margin-bottom:8px">Dashboard</h2>
+      <p style="color:var(--text-tertiary);font-size:13px;margin-bottom:20px">Panorama general del negocio</p>
       <div class="admin-stats-grid">
-        <div class="admin-stat"><div class="admin-stat-label">Usuarios</div><div class="admin-stat-value">${stats.users || stats.total_users || 0}</div></div>
-        <div class="admin-stat"><div class="admin-stat-label">Planes</div><div class="admin-stat-value">${stats.plans || stats.total_plans || 0}</div></div>
-        <div class="admin-stat"><div class="admin-stat-label">Suscripciones</div><div class="admin-stat-value">${stats.subscriptions || stats.total_subs || 0}</div></div>
-        <div class="admin-stat"><div class="admin-stat-label">Búsquedas</div><div class="admin-stat-value">${stats.searches || stats.total_searches || 0}</div></div>
+        <div class="admin-stat"><div class="admin-stat-label">Usuarios totales</div><div class="admin-stat-value">${stats.total_users || 0}</div></div>
+        <div class="admin-stat"><div class="admin-stat-label">Suscripciones activas</div><div class="admin-stat-value" style="color:var(--success)">${stats.active_subs || 0}</div></div>
+        <div class="admin-stat"><div class="admin-stat-label">Busquedas totales</div><div class="admin-stat-value">${stats.total_searches || 0}</div></div>
+        <div class="admin-stat"><div class="admin-stat-label">Hoy busquedas</div><div class="admin-stat-value" style="color:var(--accent-hover)">${stats.today_searches || 0}</div></div>
+        <div class="admin-stat"><div class="admin-stat-label">Descripciones totales</div><div class="admin-stat-value">${stats.total_descriptions || 0}</div></div>
+        <div class="admin-stat"><div class="admin-stat-label">Hoy descripciones</div><div class="admin-stat-value" style="color:var(--accent-hover)">${stats.today_descriptions || 0}</div></div>
+        <div class="admin-stat"><div class="admin-stat-label">Pagos completados</div><div class="admin-stat-value">${stats.total_payments || 0}</div></div>
+        <div class="admin-stat"><div class="admin-stat-label">Ingresos (USD)</div><div class="admin-stat-value" style="color:var(--success)">$${stats.revenue || 0}</div></div>
       </div>
     `;
   } else if (adminTab === 'plans') {
