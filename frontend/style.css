@@ -628,4 +628,4 @@ svg { flex-shrink: 0; }
   .admin-tab { flex-shrink: 0; }
   .footer-inner { flex-direction: column; gap: 20px; }
 }
-.search-clear{position:absolute;right:260px;top:50%;transform:translateY(-50%);width:22px;height:22px;border-radius:50%;background:var(--bg-tertiary);border:1px solid var(--border-primary);color:var(--text-tertiary);font-size:12px;cursor:pointer;display:none;align-items:center;justify-content:center;z-index:2;line-height:1}.search-clear.show{display:flex}.search-clear:hover{color:var(--danger)}.search-row{position:relative}
+.search-clear{position:absolute;right:180px;top:50%;transform:translateY(-50%);width:22px;height:22px;border-radius:50%;background:var(--bg-tertiary);border:1px solid var(--border-primary);color:var(--text-tertiary);font-size:12px;cursor:pointer;display:none;align-items:center;justify-content:center;z-index:2;line-height:1}.search-clear.show{display:flex}.search-clear:hover{color:var(--danger)}.search-row{position:relative}
