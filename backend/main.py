@@ -23,6 +23,13 @@ app = FastAPI(title="ML Precios v2", version="2.0")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True,
                    allow_methods=["*"], allow_headers=["*"])
 DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY", "")
+# ─── 可配置限额（可通过环境变量覆盖）─────────────
+ANON_DAILY = int(os.environ.get("ANON_DAILY_LIMIT", "3"))
+ANON_TOTAL = int(os.environ.get("ANON_TOTAL_LIMIT", "100"))
+FREE_DAILY = int(os.environ.get("FREE_DAILY_LIMIT", "10"))
+FREE_TOTAL = int(os.environ.get("FREE_TOTAL_LIMIT", "100"))
+SHARE_BONUS = int(os.environ.get("SHARE_BONUS", "5"))
+
 # ─── 匿名用户试用追踪（IP累计：50次）─────────────
 from collections import defaultdict
 _anon_usage = defaultdict(int)
@@ -70,11 +77,11 @@ def require_admin():
 def check_usage(user):
     sub = get_sub(user["id"])
     if not sub:
-        return True, "免费：每日3次", 3
+        return True, f"免费：每日{FREE_DAILY}次（总计{FREE_TOTAL}次）", FREE_DAILY
     
     plan = sub.get("plan")
     if not plan:
-        return True, "免费：每日3次", 3
+        return True, f"免费：每日{FREE_DAILY}次（总计{FREE_TOTAL}次）", FREE_DAILY
     
     if not plan.get("enabled"):
         return False, "当前套餐已停用", 0
@@ -86,7 +93,7 @@ def check_usage(user):
     start = datetime.utcnow().replace(day=1, hour=0, minute=0, second=0)
     used = get_usage(user["id"], "search", start)
     if used >= limit:
-        return False, f"本月已用{used}/{limit}次", limit - used
+        return False, f"月度额度用完（{used}/{limit}），升级套餐解锁更多", limit - used
     return True, f"剩余{limit - used}次", limit - used
 
 
@@ -215,7 +222,7 @@ def search(q: str = Query(...), site: str = Query("MLA"), user=Depends(get_curre
         if not allowed:
             return JSONResponse(content={"error":"usage_limit","message":msg,"need_payment":True}, status_code=402)
         today = __import__("datetime").date.today().isoformat()
-        remain = 3 - _anon_daily[client_ip].get(today, 0)
+        remain = ANON_DAILY - _anon_daily[client_ip].get(today, 0)
     
     products = search_products(q, site=site)
     if not products:
@@ -288,10 +295,10 @@ async def share_bonus(request: Request):
     ip = request.client.host if request.client else "unknown"
     current = _anon_usage[ip]
     if current >= 10:
-        return {"ok": False, "message": "Max 100"}
+        return {"ok": False, "message": "Max " + str(ANON_TOTAL)}
     _anon_usage[ip] = max(0, current - 50)
-    remaining = 100 - _anon_usage[ip]
-    return {"ok": True, "bonus": 50, "remaining": remaining}
+    remaining = ANON_TOTAL - _anon_usage[ip]
+    return {"ok": True, "bonus": SHARE_BONUS, "remaining": remaining}
 
 
 @app.get("/api/ai/analyze")

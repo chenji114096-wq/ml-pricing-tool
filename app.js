@@ -352,11 +352,11 @@ async function loadPricingPage() {
     const price = plan.price_monthly || 0;
     const featured = price > 0 && i === PLANS.findIndex(p => p.price_monthly > 0);
     const planFeatures = {
-      'free': ['10 busquedas/dia (300/mes)', 'AI analisis de precios', '1 descripcion IA gratuita', 'Soporte por email'],
-      'pro': ['500 busquedas/mes', 'AI analisis (DeepSeek)', '50 descripciones IA/mes', 'Soporte prioritario'],
-      'empresa': ['Busquedas ilimitadas', 'AI analisis avanzado', '100 descripciones IA/mes', 'Soporte prioritario', 'Exportacion CSV'],
-      'professional': ['Busquedas ilimitadas', 'IA + descripciones premium', '200 descripciones IA/mes', 'Soporte dedicado 24/7', 'CSV + PDF', 'Seguimiento competidores'],
-      'pay_per_search': ['Pago por busqueda', 'Analisis de IA', 'Soporte por email'],
+      'free': ['10 busquedas/dia', 'AI analisis de precios', '1 descripcion IA'],
+      'pro': ['500 busquedas/mes', 'AI analisis avanzado', '50 descripciones IA/mes'],
+      'empresa': ['Busquedas ilimitadas', '100 descripciones IA/mes', 'Exportacion CSV'],
+      'professional': ['Busquedas ilimitadas', '200 descripciones IA/mes', 'CSV + PDF', 'Seguimiento competidores'],
+      'pay_per_search': ['Pago por busqueda', 'AI analisis'],
     };
     const features = planFeatures[plan.slug] || planFeatures['free'];
 
