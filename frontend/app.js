@@ -321,7 +321,7 @@ async function generateDescription() {
     $('describeBtn').textContent = 'Generar con IA';
     $('describeBtn').disabled = false;
     const text = data.description_es || data.description || data.result;
-    if (text) $('describeResult').textContent = text;
+    if (text) { $('describeResult').textContent = text; show($('copyDescBtn')); }
     else $('describeResult').textContent = 'No se pudo generar. Intenta de nuevo.';
   } catch(e) {
     $('describeBtn').textContent = 'Generar con IA';
