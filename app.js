@@ -355,7 +355,7 @@ async function loadPricingPage() {
       'free': ['10 busquedas/dia', 'AI analisis de precios', '1 descripcion IA'],
       'pro': ['500 busquedas/mes', 'AI analisis avanzado', '50 descripciones IA/mes'],
       'enterprise': ['Busquedas ilimitadas', '100 descripciones IA/mes', 'Exportacion CSV'],
-      'professional': ['Busquedas ilimitadas', '200 descripciones IA/mes', 'CSV + PDF', 'Seguimiento competidores'],
+      'professional': ['Busquedas ilimitadas', '500 descripciones IA/mes', 'CSV + PDF', 'Seguimiento competidores'],
       'pay_per_search': ['Pago por busqueda', 'AI analisis'],
     };
     const features = planFeatures[plan.slug] || planFeatures['free'];

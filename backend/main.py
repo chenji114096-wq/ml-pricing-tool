@@ -285,6 +285,17 @@ def search(q: str = Query(...), site: str = Query("MLA"), user=Depends(get_curre
 @app.get("/api/describe")
 def describe(title: str = Query(...), price: float = Query(0), currency: str = Query("ARS"),
              features: Optional[str] = Query(None), user=Depends(require_user)):
+    # Description limits per plan
+    desc_limits = {"free": 1, "pro": 50, "enterprise": 100, "professional": 500}
+    sub = get_sub(user["id"])
+    plan_slug = sub.get("plan", {}).get("slug", "free") if sub else "free"
+    limit = desc_limits.get(plan_slug, 0)
+    if limit > 0:
+        start = __import__("datetime").datetime.utcnow().replace(day=1, hour=0, minute=0, second=0)
+        used = get_usage(user["id"], "describe", start)
+        if used >= limit:
+            raise HTTPException(402, f"描述额度用完（{used}/{limit}），升级套餐解锁更多")
+    
     feat_list = [f.strip() for f in features.split(",")] if features else []
     desc = generate_description(title, price, currency, feat_list, api_key=DEEPSEEK_API_KEY)
     add_usage(user["id"], "describe")
