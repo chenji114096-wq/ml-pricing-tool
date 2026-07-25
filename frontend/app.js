@@ -1,3 +1,16 @@
+
+function showUpgradeModal(msg) {
+  var m = document.getElementById('upgradeModal');
+  if (!m) { m = document.createElement('div'); m.className = 'modal-overlay'; m.id = 'upgradeModal';
+    m.innerHTML = '<div class="modal" style="text-align:center"><div style="font-size:40px;margin-bottom:8px">🚀</div><h2>Límite alcanzado</h2><p id="upgradeMsg" style="color:var(--text-tertiary);margin-bottom:16px"></p><button class="btn btn-primary btn-full" onclick="showPage('pricing');hideUpgrade()">Ver planes</button><button class="btn btn-ghost btn-full" style="margin-top:8px" onclick="showAuth();hideUpgrade()">Iniciar sesión</button></div>';
+    m.addEventListener('click', function(e){ if(e.target===m) hideUpgrade(); });
+    document.body.appendChild(m);
+  }
+  document.getElementById('upgradeMsg').textContent = msg || 'Has alcanzado el límite gratuito.';
+  m.classList.remove('hidden');
+}
+function hideUpgrade(){ var m = document.getElementById('upgradeModal'); if(m) m.classList.add('hidden'); }
+
 /* ═══════════════════════════════════════════════════════════
    ML Precios — Application Logic
    ═══════════════════════════════════════════════════════════ */
@@ -202,8 +215,7 @@ async function doSearch() {
   hide($('loadingSection'));
 
   if (data.status === 402 || data.error === 'usage_limit') {
-    if (!USER) { showAuth(); return; }
-    showUpgradeModal(data.message || 'Limite alcanzado');
+    showUpgradeModal(data.message || data.detail || 'Limite alcanzado');
     return;
   }
 
@@ -295,15 +307,14 @@ async function loadAIAsync(query, site) {
   
   try {
     // Use a separate lightweight AI-only endpoint
-    const res = await fetch(API + '/ai/analyze?q=' + encodeURIComponent(query) + '&site=' + site);
-    const aiData = await res.json();
+    const aiData = await api('GET', '/ai/analyze?q=' + encodeURIComponent(query) + '&site=' + site);
     
     if (aiData.suggested_price) {
       const riskLevels = { 'bajo': 'risk-low', 'low': 'risk-low', 'medio': 'risk-medium', 'medium': 'risk-medium', 'alto': 'risk-high', 'high': 'risk-high' };
       const riskClass = riskLevels[aiData.risk_level?.toLowerCase()] || 'risk-low';
       $('aiBody').innerHTML = '<div class="ai-suggested">' + (aiData.currency || '$') + ' ' + (aiData.suggested_price?.toLocaleString() || aiData.suggested_price) + '</div><div class="ai-reason">' + (aiData.reason || 'Analisis completado.') + '</div><div class="ai-meta"><span class="ai-tag ' + riskClass + '">Riesgo ' + (aiData.risk_level || 'N/A') + '</span>' + (aiData.competitor_insight ? '<span class="ai-tag insight">' + aiData.competitor_insight + '</span>' : '') + '</div>';
     } else {
-      hide($('aiPanel'));
+      $('aiBody').innerHTML = '<p style="color:var(--text-tertiary);text-align:center;padding:12px">No hay suficiente datos para generar analisis de IA.</p>';
     }
   } catch(e) {
     hide($('aiPanel'));
@@ -318,11 +329,12 @@ async function generateDescription() {
   $('describeResult').textContent = 'DeepSeek generando...';
   try {
     const data = await api('GET', '/describe?title=' + encodeURIComponent(title));
+    if (data.status === 402) { $('describeBtn').textContent = 'Generar con IA'; $('describeBtn').disabled = false; $('describeResult').textContent = data.detail || 'Limite alcanzado'; showUpgradeModal(data.detail); return; }
     $('describeBtn').textContent = 'Generar con IA';
     $('describeBtn').disabled = false;
     const text = data.description_es || data.description || data.result;
     if (text) { $('describeResult').textContent = text; show($('copyDescBtn')); }
-    else $('describeResult').textContent = 'No se pudo generar. Intenta de nuevo.';
+    else { $('describeResult').textContent = (data.detail||data.error||'No se pudo generar. Intenta de nuevo.'); if(data.status===402) showUpgradeModal(data.detail); }
   } catch(e) {
     $('describeBtn').textContent = 'Generar con IA';
     $('describeBtn').disabled = false;
