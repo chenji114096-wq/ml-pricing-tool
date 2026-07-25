@@ -76,12 +76,20 @@ def require_admin():
 
 def check_usage(user):
     sub = get_sub(user["id"])
-    if not sub:
-        return True, f"免费：每日{FREE_DAILY}次（总计{FREE_TOTAL}次）", FREE_DAILY
+    # Free user or no subscription: enforce daily + total limits
+    if not sub or not sub.get("plan"):
+        today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+        daily = get_usage(user["id"], "search", today_start)
+        if daily >= FREE_DAILY:
+            return False, f"今日已达{FREE_DAILY}次上限", 0
+        ever_start = datetime.utcnow().replace(year=2000, month=1, day=1)
+        total = get_usage(user["id"], "search", ever_start)
+        if total >= FREE_TOTAL:
+            return False, f"免费{FREE_TOTAL}次已用完，请升级套餐", 0
+        remain = FREE_TOTAL - total - 1
+        return True, f"今日剩余{FREE_DAILY-daily}次（共{remain}次）", FREE_DAILY - daily
     
     plan = sub.get("plan")
-    if not plan:
-        return True, f"免费：每日{FREE_DAILY}次（总计{FREE_TOTAL}次）", FREE_DAILY
     
     if not plan.get("enabled"):
         return False, "当前套餐已停用", 0
