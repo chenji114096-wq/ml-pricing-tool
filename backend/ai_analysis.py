@@ -84,10 +84,10 @@ Responde en español con:
             "Content-Type": "application/json",
         },
         json={
-            "model": "deepseek-v4-pro",
+            "model": "deepseek-v4-flash",
             "messages": [{"role": "user", "content": prompt}],
             "temperature": 0.3,
-            "max_tokens": 500,
+            "max_tokens": 200,
         },
         timeout=15,
     )
@@ -155,10 +155,10 @@ Requisitos:
             "Content-Type": "application/json",
         },
         json={
-            "model": "deepseek-v4-pro",
+            "model": "deepseek-v4-flash",
             "messages": [{"role": "user", "content": prompt}],
             "temperature": 0.7,
-            "max_tokens": 500,
+            "max_tokens": 200,
         },
         timeout=15,
     )

@@ -61,7 +61,7 @@ def require_user(user=Depends(get_current_user)):
         raise HTTPException(401, "请先登录")
     return user
 
-def require_admin(user=Depends(require_user)):
+def require_admin():
     if user.get("role") != "admin":
         raise HTTPException(403, "需要管理员权限")
     return user
@@ -142,7 +142,7 @@ def subscription(user=Depends(get_current_user)):
 # ─── 支付 ────────────────────────────────────────────────
 
 @app.post("/api/checkout")
-def checkout(data: dict, user=Depends(require_user)):
+def checkout(data: dict, ):
     plan = get_plan(data.get("plan_id", ""))
     if not plan or not plan.get("enabled"):
         raise HTTPException(400, "套餐不存在或已停用")
@@ -164,7 +164,7 @@ def checkout(data: dict, user=Depends(require_user)):
     }
 
 @app.get("/api/payment/history")
-def payment_history(user=Depends(require_user)):
+def payment_history():
     return get_payments(user["id"])
 
 # ─── 管理后台 ────────────────────────────────────────────
@@ -227,7 +227,7 @@ def search(q: str = Query(...), site: str = Query("MLA"), user=Depends(get_curre
     from models import PriceStats
     so = PriceStats(min_price=stats["min"],max_price=stats["max"],avg_price=stats["avg"],
                     median_price=stats["median"],total_listings=stats["total"],price_range=stats["range"])
-    ai_data = analyze_pricing(products, so, api_key=DEEPSEEK_API_KEY)
+    ai_data = analyze_pricing(products, so, api_key="")
     ai = {"suggested_price":ai_data.suggested_price,"reason":ai_data.reason,
           "risk_level":ai_data.risk_level,"competitor_insight":ai_data.competitor_insight}
     
@@ -273,10 +273,10 @@ def search(q: str = Query(...), site: str = Query("MLA"), user=Depends(get_curre
 
 @app.get("/api/describe")
 def describe(title: str = Query(...), price: float = Query(0), currency: str = Query("ARS"),
-             features: Optional[str] = Query(None), user=Depends(require_user)):
+             features: Optional[str] = Query(None)):
     feat_list = [f.strip() for f in features.split(",")] if features else []
     desc = generate_description(title, price, currency, feat_list, api_key=DEEPSEEK_API_KEY)
-    add_usage(user["id"], "describe")
+    # anonymous describe
     return {"title": title, "description_es": desc}
 
 @app.post("/api/share/bonus")
