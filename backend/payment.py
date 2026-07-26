@@ -56,7 +56,7 @@ def stripe_create_checkout(plan: dict, user: dict, is_yearly: bool = False) -> s
         if price <= 0:
             return None
         session = stripe.checkout.Session.create(
-            customer_email=user.get("email", ""),
+            customer_email=(user or {}).get("email") or None,
             mode="subscription" if plan.get("slug") != "pay_per_search" else "payment",
             line_items=[{
                 "price_data": {
@@ -69,7 +69,7 @@ def stripe_create_checkout(plan: dict, user: dict, is_yearly: bool = False) -> s
             }],
             success_url=FRONTEND_URL + "/payment/success",
             cancel_url=FRONTEND_URL + "/payment/cancel",
-            metadata={"user_id": user["id"], "plan_id": plan["id"]},
+            metadata={"user_id": (user or {}).get("id", ""), "plan_id": plan["id"]},
         )
         return session.url
     except Exception as e:

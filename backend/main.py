@@ -1,5 +1,5 @@
 """ML定价工具 - FastAPI后端 v2（Supabase REST API版）"""
-import os, statistics, re, json
+import os, statistics, re, json, hashlib, time
 from datetime import datetime
 from typing import Optional
 from fastapi import FastAPI, Query, Depends, HTTPException, Request
@@ -19,10 +19,31 @@ from ai_analysis import analyze_pricing, generate_description
 from tax_calc import calc_profit, format_profit, FX
 from payment import mp_create_checkout, stripe_create_checkout
 
+
+# ─── 搜索缓存（1小时）────────────────────────────
+_SEARCH_CACHE_DIR = "/tmp/ml_search_cache"
+_SEARCH_CACHE_TTL = 3600
+def _cache_path(q, site):
+    key = hashlib.md5(f"{q}_{site}".encode()).hexdigest()
+    return os.path.join(_SEARCH_CACHE_DIR, f"{key}.json")
+def _cache_get(q, site):
+    path = _cache_path(q, site)
+    if not os.path.exists(path): return None
+    if time.time() - os.path.getmtime(path) > _SEARCH_CACHE_TTL:
+        try: os.remove(path)
+        except: pass
+        return None
+    with open(path) as f: return json.load(f)
+def _cache_set(q, site, data):
+    try:
+        os.makedirs(_SEARCH_CACHE_DIR, exist_ok=True)
+        with open(_cache_path(q, site), "w") as f: json.dump(data, f)
+    except: pass
+
 app = FastAPI(title="ML Precios v2", version="2.0")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True,
                    allow_methods=["*"], allow_headers=["*"])
-DEEPSEEK_API_KEY = "sk-9b6d3ed3edb84fc9b56abc297ae1610c"
+DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY", "")
 # ─── 可配置限额（可通过环境变量覆盖）─────────────
 ANON_DAILY = int(os.environ.get("ANON_DAILY_LIMIT", "3"))
 ANON_TOTAL = int(os.environ.get("ANON_TOTAL_LIMIT", "100"))
@@ -40,7 +61,7 @@ def check_anon_usage(ip: str):
     limit = 100
     if used >= limit:
         return False, f"免费试用已用完（{used}/{limit}次），请注册登录解锁更多"
-    return True, f"免费试用剩余 {limit - used} 次"
+    return True, f"免费试用已用{used}次，剩余{limit - used}次"
 
 
 # ─── 辅助函数 ────────────────────────────────────────────
@@ -87,7 +108,7 @@ def check_usage(user):
         if total >= FREE_TOTAL:
             return False, f"免费{FREE_TOTAL}次已用完，请升级套餐", 0
         remain = FREE_TOTAL - total - 1
-        return True, f"今日剩余{FREE_DAILY-daily}次（共{remain}次）", FREE_DAILY - daily
+        return True, f"今日还可搜{FREE_DAILY-daily}次（免费总额{FREE_TOTAL}次，剩余{remain}次）", FREE_DAILY - daily
     
     plan = sub.get("plan")
     
@@ -158,7 +179,7 @@ def subscription(user=Depends(get_current_user)):
 # ─── 支付 ────────────────────────────────────────────────
 
 @app.post("/api/checkout")
-def checkout(data: dict, ):
+def checkout(data: dict, user=Depends(get_current_user)):
     plan = get_plan(data.get("plan_id", ""))
     if not plan or not plan.get("enabled"):
         raise HTTPException(400, "套餐不存在或已停用")
@@ -232,18 +253,28 @@ def search(q: str = Query(...), site: str = Query("MLA"), user=Depends(get_curre
         today = __import__("datetime").date.today().isoformat()
         remain = ANON_DAILY - _anon_daily[client_ip].get(today, 0)
     
-    products = search_products(q, site=site)
-    if not products:
-        return {"error":"No se encontraron productos","products":[],"stats":None,"ai":None}
+    # 尝试从缓存读取
+    cached = _cache_get(q, site)
+    if cached:
+        products_data = cached
+        prices = [p["price"] for p in products_data]
+    else:
+        products = search_products(q, site=site)
+        if not products:
+            return {"error":"No se encontraron productos","products":[],"stats":None,"ai":None}
+        products_data = [{"title":p.title,"price":p.price,"currency":p.currency,"condition":p.condition,"url":p.url,"image":getattr(p,"image","")} for p in products]
+        _cache_set(q, site, products_data)
+        prices = [p.price for p in products]
     
-    prices = [p.price for p in products]
     stats = {"min":min(prices),"max":max(prices),"avg":round(statistics.mean(prices),2),
              "median":round(statistics.median(prices),2),"total":len(prices),
              "range":f"${min(prices):,.0f} - ${max(prices):,.0f}"}
     
-    from models import PriceStats
+    from models import PriceStats, Product
     so = PriceStats(min_price=stats["min"],max_price=stats["max"],avg_price=stats["avg"],
                     median_price=stats["median"],total_listings=stats["total"],price_range=stats["range"])
+    if cached and 'products' not in locals():
+        products = [Product(**p) for p in products_data]
     ai_data = analyze_pricing(products, so, api_key="")
     ai = {"suggested_price":ai_data.suggested_price,"reason":ai_data.reason,
           "risk_level":ai_data.risk_level,"competitor_insight":ai_data.competitor_insight}
@@ -257,12 +288,21 @@ def search(q: str = Query(...), site: str = Query("MLA"), user=Depends(get_curre
         _anon_daily[client_ip][today] = _anon_daily[client_ip].get(today, 0) + 1
     # 利润计算：对每个产品算到手价+利润率
     products_with_profit = []
-    for p in products[:20]:
-        profit = calc_profit(p.price, p.currency, cost_price=0)
+    for p in (products_data if cached else products)[:20]:
+        if cached:
+            price = p["price"]
+            currency = p["currency"]
+        else:
+            price = p.price
+            currency = p.currency
+        profit = calc_profit(price, currency, cost_price=0)
         products_with_profit.append({
-            "title": p.title, "price": p.price, "currency": p.currency,
-            "condition": p.condition, "url": p.url,
-            "image": getattr(p, 'image', ''),
+            "title": p["title"] if cached else p.title,
+            "price": price,
+            "currency": currency,
+            "condition": p["condition"] if cached else p.condition,
+            "url": p["url"] if cached else p.url,
+            "image": p.get("image", "") if cached else getattr(p, "image", ""),
             "_profit": {
                 "net": profit.net_profit, "margin": profit.profit_margin,
                 "ml_fee": profit.ml_fee, "tax": profit.tax_amount,
@@ -346,6 +386,19 @@ def ai_analyze(q: str = Query(...), site: str = Query("MLA")):
     }
 
 
+
+
+@app.get("/api/autocomplete")
+async def autocomplete(q: str = "", site: str = "MLA"):
+    import requests as req
+    # Try official API first
+    try:
+        r = req.get(f"https://api.mercadolibre.com/sites/{site}/autosuggest?q={q}", timeout=5)
+        if r.status_code == 200:
+            return r.json()
+    except:
+        pass
+    return {"suggested_queries": []}
 @app.get("/api/health")
 def health():
     return {"status": "ok", "version": "2.0"}

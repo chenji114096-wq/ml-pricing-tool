@@ -4,11 +4,12 @@
 2. 西语商品描述自动生成
 """
 from typing import List
+import os
 from models import Product, PriceStats, AIAnalysis
 
 # DeepSeek API
 DEEPSEEK_API_URL = "https://api.deepseek.com/v1/chat/completions"
-DEEPSEEK_API_KEY = ""  # TODO: 从环境变量读取
+DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY", "")
 
 
 def analyze_pricing(products: List[Product], stats: PriceStats, api_key: str = None) -> AIAnalysis:
