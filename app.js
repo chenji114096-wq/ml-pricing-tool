@@ -668,7 +668,7 @@ async function autocompleteSearch() {
   var dd = document.getElementById("searchSuggestions");
   if (q.length < 2) { dd.classList.remove("show"); return; }
   try {
-    var r = await fetch("/precios/api/autocomplete?q=" + encodeURIComponent(q) + "&site=" + (document.getElementById("siteSelect")?.value || "MLA"));
+    var r = await fetch(API + "/autocomplete?q=" + encodeURIComponent(q) + "&site=" + (document.getElementById("siteSelect")?.value || "MLA"));
     var d = await r.json();
     var items = (d.suggested_queries || []).slice(0, 8);
     if (items.length === 0) { dd.classList.remove("show"); return; }
