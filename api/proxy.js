@@ -1,5 +1,5 @@
 // Vercel Edge Function — proxy /api/* to backend server
-const BACKEND = 'http://159.75.27.216:8080';
+const BACKEND = 'http://159.75.27.216:80/precios';
 
 export default async function handler(request) {
   const url = new URL(request.url);
