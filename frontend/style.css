@@ -202,15 +202,18 @@ svg { flex-shrink: 0; }
 }
 .search-row {
   display: flex; align-items: center; gap: 8px;
-  padding: 4px;
+  padding: 4px; position: relative;
+}
+.search-input-wrap {
+  position: relative; flex: 1; display: flex; align-items: center;
 }
 .search-prefix {
   color: var(--text-tertiary); margin-left: 8px; flex-shrink: 0;
 }
 .search-input {
-  flex: 1; background: transparent; border: none;
+  flex: 1; background: transparent; border: none; outline: none;
   color: var(--text-primary); font-size: 15px;
-  padding: 6px 0; min-width: 0;
+  padding: 6px 32px 6px 0; min-width: 0;
 }
 .search-input::placeholder { color: var(--text-muted); }
 .site-select {
@@ -226,6 +229,18 @@ svg { flex-shrink: 0; }
   padding: 8px 12px; border-top: 1px solid var(--border-secondary);
   margin-top: 4px;
 }
+.search-usage {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 12px; font-size: 12px; color: var(--text-tertiary);
+  border-top: 1px solid var(--border-secondary);
+}
+.search-usage.low { color: var(--warning); }
+.search-usage.exhausted { color: var(--danger); background: rgba(239,68,68,0.05); }
+.search-upgrade-link {
+  color: var(--accent); text-decoration: none; font-size: 12px; font-weight: 500;
+  cursor: pointer;
+}
+.search-upgrade-link:hover { color: var(--accent-hover); }
 .tags-label { font-size: 12px; color: var(--text-muted); margin-right: 4px; }
 .tag {
   padding: 4px 12px; border-radius: 16px;
@@ -361,10 +376,27 @@ svg { flex-shrink: 0; }
 }
 .desc-input:focus { border-color: var(--accent); }
 .desc-result {
-  margin-top: 16px; padding: 16px;
   background: var(--bg-tertiary); border-radius: var(--radius-md);
-  font-size: 14px; color: var(--text-secondary); line-height: 1.7;
+  padding: 14px; font-size: 14px; line-height: 1.7;
+  color: var(--text-primary); white-space: pre-wrap; margin-top: 8px;
 }
+.desc-result-wrap { margin-top: 12px; display: none; }
+.desc-result-wrap.hidden { display: none; }
+.desc-result-wrap:not(.hidden) { display: block; }
+.desc-result-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 6px;
+}
+.desc-result-label { font-size: 12px; color: var(--text-tertiary); }
+.btn-icon {
+  background: var(--bg-tertiary); border: 1px solid var(--border-primary);
+  border-radius: var(--radius-md); color: var(--text-secondary);
+  cursor: pointer; width: 32px; height: 32px;
+  display: flex; align-items: center; justify-content: center;
+  transition: all .15s;
+}
+.btn-icon:hover { background: var(--bg-hover); color: var(--accent-hover); border-color: var(--accent); }
+.btn-icon.hidden { display: none; }
 
 /* ─── Features ─── */
 .features {
@@ -628,5 +660,5 @@ svg { flex-shrink: 0; }
   .admin-tab { flex-shrink: 0; }
   .footer-inner { flex-direction: column; gap: 20px; }
 }
-.search-clear{position:absolute;right:180px;top:50%;transform:translateY(-50%);width:22px;height:22px;border-radius:50%;background:var(--bg-tertiary);border:1px solid var(--border-primary);color:var(--text-tertiary);font-size:12px;cursor:pointer;display:none;align-items:center;justify-content:center;z-index:2;line-height:1}.search-clear.show{display:flex}.search-clear:hover{color:var(--danger)}.search-row{position:relative}
+.search-clear{position:absolute;right:6px;top:50%;transform:translateY(-50%);width:20px;height:20px;border-radius:50%;background:var(--bg-tertiary);border:1px solid var(--border-primary);color:var(--text-tertiary);font-size:11px;cursor:pointer;display:none;align-items:center;justify-content:center;z-index:2;line-height:1;padding:0}.search-clear.show{display:flex}.search-clear:hover{background:var(--bg-hover);color:var(--danger)}
 .search-suggestions{position:absolute;top:100%;left:0;right:0;background:var(--bg2);border:1px solid var(--bor);border-radius:0 0 var(--r2) var(--r2);z-index:10;max-height:240px;overflow-y:auto;display:none}.search-suggestions.show{display:block}.ss-item{padding:10px 14px;font-size:13px;color:var(--t2);cursor:pointer;transition:.1s}.ss-item:hover{background:var(--bg3);color:var(--t1)}

@@ -12,7 +12,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=1784958420">
+<link rel="stylesheet" href="style.css?v=1785059337">
 </head>
 <body>
 
@@ -91,8 +91,12 @@
       </p>
       <div class="search-panel" id="searchPanel">
         <div class="search-row">
-          <svg class="search-prefix" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-          <input type="text" class="search-input" id="searchInput" oninput="toggleClear()" placeholder="Buscar producto… ej: iPhone 15 Pro, Nike Air Max, Samsung S24" autocomplete="off"><div class="search-suggestions" id="searchSuggestions"></div><button class="search-clear" id="searchClear" onclick="clearSearch()">✕</button>
+          <div class="search-input-wrap">
+            <svg class="search-prefix" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+            <input type="text" class="search-input" id="searchInput" oninput="toggleClear();autocompleteSearch()" placeholder="Buscar producto… ej: iPhone 15 Pro, Nike Air Max, Samsung S24" autocomplete="off">
+            <button class="search-clear" id="searchClear" onclick="clearSearch()">✕</button>
+          </div>
+          <div class="search-suggestions" id="searchSuggestions"></div>
           <select class="site-select" id="siteSelect">
             <option value="MLA">🇦🇷 Argentina</option>
             <option value="MLM">🇲🇽 México</option>
@@ -104,6 +108,10 @@
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
             Analizar
           </button>
+        </div>
+        <div class="search-usage" id="searchUsage">
+          <span id="searchUsageText">Búsquedas gratuitas restantes: —</span>
+          <a href="#" onclick="showPage('pricing');return false" class="search-upgrade-link">Ver planes</a>
         </div>
         <div class="search-tags">
           <span class="tags-label">Popular:</span>
@@ -166,7 +174,15 @@
         <input type="text" class="desc-input" id="describeInput" placeholder="Nombre del producto para generar descripción…">
         <button class="btn btn-secondary" id="describeBtn">Generar con IA</button>
       </div>
-      <div class="desc-result hidden" id="describeResult"></div><button class="btn btn-ghost copy-desc hidden" id="copyDescBtn" onclick="copyDescription()" style="margin-top:8px">Copiar descripcion</button>
+      <div class="desc-result-wrap hidden" id="describeResultWrap">
+        <div class="desc-result-header">
+          <span class="desc-result-label">Descripción generada</span>
+          <button class="btn-icon copy-desc hidden" id="copyDescBtn" onclick="copyDescription()" title="Copiar descripción">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+          </button>
+        </div>
+        <div class="desc-result" id="describeResult"></div>
+      </div>
     </div>
   </section>
 
@@ -331,6 +347,6 @@
   </div>
 </div>
 
-<script src="app.js?v=1784958420"></script>
+<script src="app.js?v=1785059337"></script>
 </body>
 </html>

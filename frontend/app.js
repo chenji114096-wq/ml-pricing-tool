@@ -1,4 +1,4 @@
-const API = window.location.pathname.startsWith("/ml/") ? "/ml/api" : "/api";
+const API = window.location.pathname.startsWith("/ml/") ? "/ml/api" : window.location.pathname.startsWith("/precios/") ? "/precios/api" : "/api";
 let TOKEN = localStorage.getItem('ml_token') || '';
 let USER = null;
 let PLANS = [];
@@ -271,6 +271,8 @@ async function doSearch() {
   if (data.usage) {
     $('usageLabel').textContent = data.usage.remaining;
     show($('usageBadge'));
+    // Update search usage bar
+    updateSearchUsage(data.usage.remaining, data.usage.limit);
   }
 
   $('resultsSection').scrollIntoView({ behavior: 'smooth' }); showShareBar();
@@ -303,10 +305,11 @@ async function loadAIAsync(query, site) {
 }
 async function generateDescription() {
   const title = $('describeInput').value.trim();
-  if (!title) { show($('describeResult')); $('describeResult').textContent = 'Ingresa un producto'; return; }
+  if (!title) { show($('describeResultWrap')); hide($('copyDescBtn')); $('describeResult').textContent = 'Ingresa un producto'; return; }
   $('describeBtn').textContent = 'Generando...';
   $('describeBtn').disabled = true;
-  show($('describeResult'));
+  show($('describeResultWrap'));
+  hide($('copyDescBtn'));
   $('describeResult').textContent = 'DeepSeek generando...';
   try {
     const data = await api('GET', '/describe?title=' + encodeURIComponent(title));
@@ -314,6 +317,7 @@ async function generateDescription() {
     $('describeBtn').textContent = 'Generar con IA';
     $('describeBtn').disabled = false;
     const text = data.description_es || data.description || data.result;
+    
     if (text) { $('describeResult').textContent = text; show($('copyDescBtn')); }
     else { $('describeResult').textContent = (data.detail||data.error||'No se pudo generar. Intenta de nuevo.'); if(data.status===402) showUpgradeModal(data.detail); }
   } catch(e) {
@@ -542,6 +546,26 @@ async function togglePlan(planId, enabled) {
 /* ═══════════════════════════════════════════════════════════
    Init
    ═══════════════════════════════════════════════════════════ */
+
+/* --- Upgrade Modal --- */
+function showUpgradeModal(message) {
+  var old = document.getElementById("upgradeModal");
+  if (old) old.remove();
+  var overlay = document.createElement("div");
+  overlay.id = "upgradeModal";
+  overlay.className = "modal-overlay";
+  overlay.innerHTML = '<div class="modal" style="max-width:420px;text-align:center">' +
+    '<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="1.5" style="margin:0 auto 12px;display:block">' +
+    '<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>' +
+    '<h3 style="margin-bottom:4px">Límite de búsquedas alcanzado</h3>' +
+    '<p style="color:var(--text-tertiary);margin-bottom:4px;font-size:13px">' + (message || "Has agotado tus búsquedas gratuitas del plan actual.") + '</p>' +
+    '<p style="color:var(--text-tertiary);margin-bottom:20px;font-size:13px">Actualizá tu plan para seguir usando ML Precios sin límites.</p>' +
+    `<button class="btn btn-primary" style="width:100%;margin-bottom:8px" onclick="showPage('pricing');document.getElementById('upgradeModal').remove()">Ver planes y precios</button>` +
+    `<button class="btn btn-ghost" style="width:100%" onclick="document.getElementById('upgradeModal').remove()">Ahora no</button></div>`;
+  overlay.addEventListener("click", function(e) { if (e.target === overlay) overlay.remove(); });
+  document.body.appendChild(overlay);
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
   // Hot tags
   $$('.tag[data-q]').forEach(btn => {
@@ -579,15 +603,72 @@ document.addEventListener('DOMContentLoaded', async () => {
   updateHeader();
   if (currentPage === 'pricing') loadPricingPage();
 });
-function copyDescription(){var t=document.getElementById("describeResult");if(t&&t.textContent){navigator.clipboard.writeText(t.textContent.trim());var b=document.getElementById("copyDescBtn");b.textContent="Copiado!";setTimeout(function(){b.textContent="Copiar descripcion"},2000)}}
-function toggleClear(){document.getElementById("searchClear").classList.toggle("show",document.getElementById("searchInput").value.length>0)}function clearSearch(){var i=document.getElementById("searchInput");i.value="";document.getElementById("searchClear").classList.remove("show");i.focus()}
+function copyDescription(){var t=document.getElementById("describeResult");if(t&&t.textContent){navigator.clipboard.writeText(t.textContent.trim());var b=document.getElementById("copyDescBtn");b.innerHTML='<svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"#22c55e\" stroke-width=\"2\"><polyline points=\"20 6 9 17 4 12\"/></svg>';b.title="Copiado!";setTimeout(function(){b.innerHTML='<svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"><rect x=\"9\" y=\"9\" width=\"13\" height=\"13\" rx=\"2\" ry=\"2\"/><path d=\"M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1\"/></svg>';b.title="Copiar descripción"},2000)}}
+function toggleClear(){document.getElementById("searchClear").classList.toggle("show",document.getElementById("searchInput").value.length>0)}function clearSearch(){var i=document.getElementById("searchInput");i.value="";document.getElementById("searchClear").classList.remove("show");i.focus();document.getElementById("searchSuggestions").classList.remove("show")}
+function updateSearchUsage(remaining, limit) {
+  var el = document.getElementById("searchUsageText");
+  var bar = document.getElementById("searchUsage");
+  if (!el || !bar) return;
+  bar.classList.remove("low", "exhausted");
+  if (remaining === undefined || remaining === null) {
+    el.textContent = "Inicia sesión para ver tus búsquedas";
+    return;
+  }
+  var num = parseInt(remaining);
+  if (num <= 0) {
+    el.textContent = "Has alcanzado el límite de búsquedas";
+    bar.classList.add("exhausted");
+  } else if (num <= 3) {
+    el.textContent = "Te quedan " + num + " búsquedas gratuitas";
+    bar.classList.add("low");
+  } else {
+    el.textContent = "Te quedan " + num + " búsquedas gratuitas";
+  }
+}
+
+/* --- Share & Referral Bar --- */
+function showShareBar() {
+  var old = document.getElementById("shareBar");
+  if (old) old.remove();
+  var q = document.getElementById("searchInput").value.trim();
+  if (!q) return;
+  var url = window.location.href;
+  var text = encodeURIComponent("🔍 Encontré precios para \"" + q + "\" en ML Precios. IA que analiza Mercado Libre y te dice el precio óptimo. " + url);
+  var wa = "https://wa.me/?text=" + text;
+  var fb = "https://www.facebook.com/sharer/sharer.php?u=" + encodeURIComponent(url) + "&quote=" + encodeURIComponent("Encontré los mejores precios para \"" + q + "\" en Mercado Libre con IA");
+  
+  var bar = document.createElement("div");
+  bar.id = "shareBar";
+  bar.style.cssText = "display:flex;align-items:center;gap:8px;padding:10px 14px;margin-top:12px;background:var(--bg-tertiary);border:1px solid var(--border-primary);border-radius:var(--radius-md);justify-content:space-between";
+  bar.innerHTML = '<span style="font-size:13px;color:var(--text-secondary);white-space:nowrap">📤 Compartir resultados</span>' +
+    '<div style="display:flex;gap:6px">' +
+    '<a href="' + wa + '" target="_blank" class="btn-icon" title="Compartir en WhatsApp" style="color:#25D366;border-color:#25D36633;background:#25D36611">' +
+    '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg></a>' +
+    '<a href="' + fb + '" target="_blank" class="btn-icon" title="Compartir en Facebook" style="color:#1877F2;border-color:#1877F233;background:#1877F211">' +
+    '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg></a>' +
+    '<button class="btn-icon" onclick="copyShareLink()" title="Copiar enlace" style="color:var(--accent)">' +
+    '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg></button></div>';
+  var rs = document.getElementById("resultsSection");
+  if (rs) rs.appendChild(bar);
+}
+function copyShareLink() {
+  var inp = document.createElement("input");
+  inp.value = window.location.href;
+  document.body.appendChild(inp); inp.select(); document.execCommand("copy");
+  document.body.removeChild(inp);
+  var btn = document.querySelector("#shareBar .btn-icon:last-child");
+  if (btn) { btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>'; btn.title = "Copiado!"; }
+  setTimeout(function() {
+    if (btn) { btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>'; btn.title = "Copiar enlace"; }
+  }, 2000);
+}
 
 async function autocompleteSearch() {
   var q = document.getElementById("searchInput").value;
   var dd = document.getElementById("searchSuggestions");
   if (q.length < 2) { dd.classList.remove("show"); return; }
   try {
-    var r = await fetch("https://api.mercadolibre.com/sites/" + (document.getElementById("siteSelect")?.value || "MLA") + "/autosuggest?q=" + encodeURIComponent(q));
+    var r = await fetch("/precios/api/autocomplete?q=" + encodeURIComponent(q) + "&site=" + (document.getElementById("siteSelect")?.value || "MLA"));
     var d = await r.json();
     var items = (d.suggested_queries || []).slice(0, 8);
     if (items.length === 0) { dd.classList.remove("show"); return; }
