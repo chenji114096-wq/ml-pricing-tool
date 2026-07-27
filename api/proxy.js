@@ -1,22 +1,30 @@
-// Vercel Edge Function — proxy /api/* to backend server
+// Vercel Edge Function - proxy /api/* to backend
 const BACKEND = 'http://159.75.27.216:80/precios';
 
 export default async function handler(request) {
   const url = new URL(request.url);
 
-  // Use x-vercel-forwarded-url to get the ORIGINAL path
+  // Method 1: x-vercel-forwarded-url header (set by Vercel with original URL)
   const forwardedUrl = request.headers.get('x-vercel-forwarded-url');
   let originalPath;
-  
+
   if (forwardedUrl) {
     const fwd = new URL(forwardedUrl, 'https://placeholder.com');
     originalPath = fwd.pathname + fwd.search;
   } else {
-    originalPath = url.pathname + url.search;
+    // Method 2: from vercel.json rewrite query param (?origPath=/xxx)
+    const origPath = url.searchParams.get('origPath');
+    if (origPath) {
+      url.searchParams.delete('origPath');
+      const qs = url.searchParams.toString();
+      originalPath = origPath + (qs ? '?' + qs : '');
+    } else {
+      originalPath = url.pathname + url.search;
+    }
   }
-  
+
   const target = BACKEND + originalPath;
-  
+
   try {
     const body = request.method !== 'GET' && request.method !== 'HEAD'
       ? await request.text()
