@@ -1,4 +1,4 @@
-const API = window.location.pathname.startsWith("/ml/") ? "/ml/api" : window.location.pathname.startsWith("/precios/") ? "/precios/api" : "/api";
+const API = window.location.hostname.includes("mlprecios.com") || window.location.hostname === "159.75.27.216" ? "/precios/api" : "https://mlprecios.com/precios/api";
 let TOKEN = localStorage.getItem('ml_token') || '';
 let USER = null;
 let PLANS = [];
