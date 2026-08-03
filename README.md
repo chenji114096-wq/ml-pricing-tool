@@ -1,5 +1,7 @@
 # ML Precios — Analizador de Precios con IA
 
+**🌐 Live: [https://mlprecios.com](https://mlprecios.com)** — Free to start, no credit card required. Search any product and get price intelligence in seconds.
+
 Mercado Libre 卖家定价分析工具。输入产品名，自动抓取全平台同款产品的价格数据，用 AI 给出建议定价，还能自动生成西语商品描述。
 
 ## 📂 项目结构
