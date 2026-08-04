@@ -28,7 +28,9 @@ def get_enabled_plans():
 
 def get_plan(pid):
     p = api("GET", "subscription_plans", f"?id=eq.{pid}&limit=1")
-    return p[0] if p else None
+    if not isinstance(p, list) or not p:
+        p = api("GET", "subscription_plans", f"?slug=eq.{pid}&limit=1")
+    return p[0] if isinstance(p, list) and p else None
 
 def update_plan(pid, data):
     api("PATCH", "subscription_plans", f"?id=eq.{pid}", data)
@@ -44,6 +46,14 @@ def get_sub(user_id):
 def get_usage(user_id, action, since):
     u = api("GET", "usage_records", f"?user_id=eq.{user_id}&action=eq.{action}&created_at=gte.{since.isoformat()}&select=count")
     return u[0]["count"] if u else 0
+
+def get_effective_usage(user_id, since):
+    """Get effective search usage counting both search (cost=+1) and referral_reward (cost=-5)"""
+    searches = api("GET", "usage_records", f"?user_id=eq.{user_id}&action=eq.search&created_at=gte.{since.isoformat()}&select=cost")
+    rewards = api("GET", "usage_records", f"?user_id=eq.{user_id}&action=eq.referral_reward&created_at=gte.{since.isoformat()}&select=cost")
+    search_sum = sum(r["cost"] for r in (searches or []) if r.get("cost"))
+    reward_sum = sum(r["cost"] for r in (rewards or []) if r.get("cost"))
+    return max(0, search_sum + reward_sum)
 
 def add_usage(user_id, action="search"):
     api("POST", "usage_records", data={"user_id":user_id,"action":action,"cost":1})
@@ -67,9 +77,9 @@ def get_stats():
         "total_users": count("users"),
         "active_subs": count("user_subscriptions", "&status=eq.active"),
         "total_searches": count("usage_records", "&action=eq.search"),
-        "total_descriptions": count("usage_records", "&action=eq.describe"),
+        "total_descriptions": count("usage_records", "&action=eq.ai_description"),
         "today_searches": today_count("usage_records", "&action=eq.search"),
-        "today_descriptions": today_count("usage_records", "&action=eq.describe"),
+        "today_descriptions": today_count("usage_records", "&action=eq.ai_description"),
         "total_payments": count("payment_records", "&status=eq.completed"),
         "revenue": sum_payments(),
     }
@@ -99,6 +109,8 @@ def upsert_subscription(user_id, plan_id, provider="", payment_subscription_id="
     return api("POST", "user_subscriptions", data=data)
 def get_settings():
     s = api("GET", "system_settings")
+    if not isinstance(s, list):
+        return {}
     return {x["key"]: x["value"] for x in s} if s else {}
 
 def set_setting(key, val):

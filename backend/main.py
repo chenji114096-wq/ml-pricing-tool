@@ -10,8 +10,9 @@ from pydantic import BaseModel
 
 from database import (
     get_user, create_user, get_enabled_plans, get_plan, update_plan,
-    get_all_plans, get_sub, get_usage, add_usage, get_payments,
-    get_all_users, get_stats, get_settings, set_setting
+    get_all_plans, get_sub, get_usage, get_effective_usage, add_usage, get_payments,
+    get_all_users, get_stats, get_settings, set_setting,
+    upsert_subscription
 )
 from auth import hash_password, verify_password, create_access_token, decode_token
 from crawler import search_products
@@ -23,21 +24,21 @@ from payment import mp_create_checkout, stripe_create_checkout
 # ─── 搜索缓存（1小时）────────────────────────────
 _SEARCH_CACHE_DIR = "/tmp/ml_search_cache"
 _SEARCH_CACHE_TTL = 3600
-def _cache_path(q, site):
-    key = hashlib.md5(f"{q}_{site}".encode()).hexdigest()
+def _cache_path(q, site, prefix="search"):
+    key = hashlib.md5(f"{prefix}_{q}_{site}".encode()).hexdigest()
     return os.path.join(_SEARCH_CACHE_DIR, f"{key}.json")
-def _cache_get(q, site):
-    path = _cache_path(q, site)
+def _cache_get(q, site, prefix="search"):
+    path = _cache_path(q, site, prefix)
     if not os.path.exists(path): return None
     if time.time() - os.path.getmtime(path) > _SEARCH_CACHE_TTL:
         try: os.remove(path)
         except: pass
         return None
     with open(path) as f: return json.load(f)
-def _cache_set(q, site, data):
+def _cache_set(q, site, data, prefix="search"):
     try:
         os.makedirs(_SEARCH_CACHE_DIR, exist_ok=True)
-        with open(_cache_path(q, site), "w") as f: json.dump(data, f)
+        with open(_cache_path(q, site, prefix), "w") as f: json.dump(data, f)
     except: pass
 
 app = FastAPI(title="ML Precios v2", version="2.0")
@@ -50,6 +51,11 @@ ANON_TOTAL = int(os.environ.get("ANON_TOTAL_LIMIT", "100"))
 FREE_DAILY = int(os.environ.get("FREE_DAILY_LIMIT", "10"))
 FREE_TOTAL = int(os.environ.get("FREE_TOTAL_LIMIT", "100"))
 SHARE_BONUS = int(os.environ.get("SHARE_BONUS", "5"))
+REFERRAL_BONUS = int(os.environ.get("REFERRAL_BONUS", "5"))
+
+# ─── 邀请码系统 ─────────────────────────────────
+import base64, struct
+_referral_cache = {}  # referral_code -> user_id
 
 # ─── 匿名用户试用追踪（IP累计：50次）─────────────
 from collections import defaultdict
@@ -60,8 +66,38 @@ def check_anon_usage(ip: str):
     used = _anon_usage[ip]
     limit = 100
     if used >= limit:
-        return False, f"免费试用已用完（{used}/{limit}次），请注册登录解锁更多"
-    return True, f"免费试用已用{used}次，剩余{limit - used}次"
+        return False, f"Prueba gratuita agotada ({used}/{limit}). Iniciá sesión para obtener más búsquedas"
+    return True, f"Has usado {used} de {limit} búsquedas gratuitas. Te quedan {limit - used}"
+
+
+def _make_referral_code(user_id: str) -> str:
+    """从user_id生成6位邀请码"""
+    h = hashlib.sha256(user_id.encode()).hexdigest()
+    code = ''.join(c for c in h.upper() if c.isalnum())[:6]
+    return code
+
+def _find_user_by_referral(code: str):
+    """通过邀请码查找用户"""
+    if code in _referral_cache:
+        return _referral_cache[code]
+    # 查找所有用户（小规模，可接受）
+    from database import get_all_users
+    users = get_all_users()
+    if not isinstance(users, list):
+        return None
+    for u in users:
+        if _make_referral_code(u["id"]) == code.upper():
+            _referral_cache[code] = u["id"]
+            return u["id"]
+    return None
+
+def _get_ref_bonus(user_id: str) -> int:
+    """获取用户已获得的邀请奖励（搜索次数）"""
+    from datetime import datetime
+    from database import get_usage
+    start = datetime(2000, 1, 1)
+    r = get_usage(user_id, "referral_reward", start)
+    return abs(r) if r else 0
 
 
 # ─── 辅助函数 ────────────────────────────────────────────
@@ -87,12 +123,12 @@ def get_user_by_id(uid):
 
 def require_user(user=Depends(get_current_user)):
     if not user:
-        raise HTTPException(401, "请先登录")
+        raise HTTPException(401, "Iniciá sesión primero")
     return user
 
-def require_admin():
+def require_admin(user=Depends(require_user)):
     if user.get("role") != "admin":
-        raise HTTPException(403, "需要管理员权限")
+        raise HTTPException(403, "Se requiere permisos de administrador")
     return user
 
 def check_usage(user):
@@ -102,28 +138,28 @@ def check_usage(user):
         today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
         daily = get_usage(user["id"], "search", today_start)
         if daily >= FREE_DAILY:
-            return False, f"今日已达{FREE_DAILY}次上限", 0
+            return False, f"Límite diario alcanzado ({FREE_DAILY})", 0
         ever_start = datetime.utcnow().replace(year=2000, month=1, day=1)
         total = get_usage(user["id"], "search", ever_start)
         if total >= FREE_TOTAL:
-            return False, f"免费{FREE_TOTAL}次已用完，请升级套餐", 0
+            return False, f"Superaste las {FREE_TOTAL} búsquedas gratis. Actualizá tu plan", 0
         remain = FREE_TOTAL - total - 1
-        return True, f"今日还可搜{FREE_DAILY-daily}次（免费总额{FREE_TOTAL}次，剩余{remain}次）", FREE_DAILY - daily
+        return True, f"Te quedan {FREE_DAILY-daily} búsquedas hoy ({FREE_TOTAL} gratis, restan {remain})", FREE_DAILY - daily
     
     plan = sub.get("plan")
     
     if not plan.get("enabled"):
-        return False, "当前套餐已停用", 0
+        return False, "El plan actual está deshabilitado", 0
     
     limit = plan.get("search_limit_monthly", 0)
     if limit < 0:
-        return True, "无限", 999
+        return True, "Ilimitado", 999
     
     start = datetime.utcnow().replace(day=1, hour=0, minute=0, second=0)
-    used = get_usage(user["id"], "search", start)
+    used = get_effective_usage(user["id"], start)
     if used >= limit:
-        return False, f"月度额度用完（{used}/{limit}），升级套餐解锁更多", limit - used
-    return True, f"剩余{limit - used}次", limit - used
+        return False, f"Límite mensual alcanzado ({used}/{limit}). Actualizá tu plan", limit - used
+    return True, f"Restan {limit - used} búsquedas", limit - used
 
 
 # ═══════════════════════════════════════════════════════════
@@ -136,14 +172,28 @@ class AuthBody(BaseModel):
     email: str
     password: str
     name: str = ""
+    referral_code: str = ""
 
 @app.post("/api/auth/register")
 def register(body: AuthBody):
     if get_user(body.email):
-        raise HTTPException(400, "该邮箱已注册")
+        raise HTTPException(400, "Este email ya está registrado")
     user = create_user(body.email, hash_password(body.password), body.name)
     if isinstance(user, list):
         user = user[0]
+    # Auto-claim referral code
+    if body.referral_code:
+        try:
+            from fastapi import Request as _Req
+            rc = body.referral_code.strip().upper()
+            if len(rc) == 6 and rc != _make_referral_code(user["id"]):
+                referrer_id = _find_user_by_referral(rc)
+                if referrer_id:
+                    from database import api as _api
+                    _api("POST", "usage_records", data={"user_id": referrer_id, "action": "referral_reward", "cost": -REFERRAL_BONUS})
+                    _api("POST", "usage_records", data={"user_id": user["id"], "action": "referral_claimed", "cost": 0})
+        except Exception:
+            pass
     token = create_access_token(user["id"])
     return {"token": token, "user": {"id": user["id"], "email": user["email"], "name": user.get("name",""), "role": user.get("role","user")}}
 
@@ -151,7 +201,7 @@ def register(body: AuthBody):
 def login(body: AuthBody):
     user = get_user(body.email)
     if not user or not verify_password(body.password, user["password_hash"]):
-        raise HTTPException(401, "邮箱或密码错误")
+        raise HTTPException(401, "Email o contraseña incorrectos")
     token = create_access_token(user["id"])
     return {"token": token, "user": {"id": user["id"], "email": user["email"], "name": user.get("name",""), "role": user.get("role","user")}}
 
@@ -170,11 +220,13 @@ def list_plans():
 @app.get("/api/subscription")
 def subscription(user=Depends(get_current_user)):
     if not user:
-        return {"logged_in": False, "user": None, "plan": "free", "remaining": 3, "message": "未登录"}
+        return {"logged_in": False, "user": None, "plan": "free", "remaining": 3, "message": "No has iniciado sesión"}
     allowed, msg, remain = check_usage(user)
     sub = get_sub(user["id"])
     plan_slug = sub["plan"]["slug"] if sub and sub.get("plan") else "free"
-    return {"logged_in": True, "user": {"id": user["id"], "email": user["email"], "name": user.get("name",""), "role": user.get("role","user")}, "plan": plan_slug, "remaining": remain, "message": msg}
+    ref_code = _make_referral_code(user["id"])
+    ref_bonus = _get_ref_bonus(user["id"])
+    return {"logged_in": True, "user": {"id": user["id"], "email": user["email"], "name": user.get("name",""), "role": user.get("role","user")}, "plan": plan_slug, "remaining": remain, "message": msg, "referral_code": ref_code, "referral_bonus": ref_bonus}
 
 # ─── 支付 ────────────────────────────────────────────────
 
@@ -182,22 +234,33 @@ def subscription(user=Depends(get_current_user)):
 def checkout(data: dict, user=Depends(get_current_user)):
     plan = get_plan(data.get("plan_id", ""))
     if not plan or not plan.get("enabled"):
-        raise HTTPException(400, "套餐不存在或已停用")
-    provider = data.get("provider", "mercadopago")
-    is_yearly = data.get("is_yearly", False)
+        raise HTTPException(400, "El plan no existe o está deshabilitado")
+    price = plan.get("price_yearly") if data.get("is_yearly") else plan.get("price_monthly", 0)
 
+    # Free plan: activate directly, no payment gateway
+    if price <= 0:
+        upsert_subscription(user["id"], plan["id"])
+        return {
+            "checkout_url": None,
+            "plan": plan["name"],
+            "amount": 0,
+            "is_free": True,
+            "message": "¡Plan Free activado! Disfrutá de tus búsquedas."
+        }
+
+    provider = data.get("provider", "mercadopago")
     checkout_url = None
     if provider == "stripe":
-        checkout_url = stripe_create_checkout(plan, user, is_yearly)
+        checkout_url = stripe_create_checkout(plan, user, data.get("is_yearly", False))
     else:
-        checkout_url = mp_create_checkout(plan, user, is_yearly)
+        checkout_url = mp_create_checkout(plan, user, data.get("is_yearly", False))
 
     return {
         "checkout_url": checkout_url,
         "plan": plan["name"],
-        "amount": plan["price_yearly"] if is_yearly else plan["price_monthly"],
+        "amount": price,
         "provider": provider,
-        "message": "Redirigiendo al pago..." if checkout_url else "支付网关未配置，请联系管理员"
+        "message": "Redirigiendo al pago..." if checkout_url else "Pasarela de pago no configurada. Contactá al administrador"
     }
 
 @app.get("/api/payment/history")
@@ -225,7 +288,31 @@ def admin_update_plan(plan_id: str, data: dict, admin=Depends(require_admin)):
 
 @app.get("/api/admin/users")
 def admin_users(admin=Depends(require_admin)):
-    return get_all_users()
+    users = get_all_users()
+    # Enrich with subscription and usage
+    enriched = []
+    start = datetime.utcnow().replace(day=1, hour=0, minute=0, second=0)
+    for u in users:
+        sub = get_sub(u["id"])
+        plan_slug = sub["plan"]["slug"] if sub and sub.get("plan") else "free"
+        search_used = get_effective_usage(u["id"], start)
+        ai_used = get_usage(u["id"], "ai_description", start)
+        enriched.append({
+            "id": u["id"],
+            "email": u.get("email", ""),
+            "name": u.get("name", ""),
+            "plan": plan_slug,
+            "role": u.get("role", "user"),
+            "created_at": u.get("created_at", ""),
+            "search_used": search_used,
+            "ai_used": ai_used,
+        })
+    return enriched
+
+@app.get("/api/admin/payments")
+def admin_payments(admin=Depends(require_admin)):
+    from database import api as _api
+    return _api("GET", "payment_records", "?order=created_at.desc&limit=50")
 
 @app.get("/api/admin/settings")
 def admin_settings(admin=Depends(require_admin)):
@@ -266,9 +353,12 @@ def search(q: str = Query(...), site: str = Query("MLA"), user=Depends(get_curre
         _cache_set(q, site, products_data)
         prices = [p.price for p in products]
     
+    SITE_CURRENCIES = {"MLA":"ARS","MLB":"BRL","MLM":"MXN","MLC":"CLP","MLU":"UYU"}
+    currency = SITE_CURRENCIES.get(site, "ARS")
     stats = {"min":min(prices),"max":max(prices),"avg":round(statistics.mean(prices),2),
              "median":round(statistics.median(prices),2),"total":len(prices),
-             "range":f"${min(prices):,.0f} - ${max(prices):,.0f}"}
+             "currency":currency,
+             "range":f"${min(prices):,.0f} - ${max(prices):,.0f} {currency}"}
     
     from models import PriceStats, Product
     so = PriceStats(min_price=stats["min"],max_price=stats["max"],avg_price=stats["avg"],
@@ -328,7 +418,7 @@ def search(q: str = Query(...), site: str = Query("MLA"), user=Depends(get_curre
             "products": products_with_profit,
             "stats":stats,"ai":ai,
             "profit_analysis": best_analysis,
-            "usage":{"remaining": msg if user else f"试用剩余 {remain} 次"}}
+            "usage":{"remaining": msg if user else "Restan {remain} búsquedas"}}
 
 @app.get("/api/describe")
 def describe(title: str = Query(...), price: float = Query(0), currency: str = Query("ARS"),
@@ -336,24 +426,56 @@ def describe(title: str = Query(...), price: float = Query(0), currency: str = Q
     allowed, msg, remain = check_usage(user)
     if not allowed:
         raise HTTPException(402, msg)
+    sub = get_sub(user["id"])
+    if sub and sub.get("plan"):
+        ai_limit = sub["plan"].get("include_ai_description", 0)
+        if ai_limit and isinstance(ai_limit, (int, float)) and ai_limit > 0:
+            start = datetime.utcnow().replace(day=1, hour=0, minute=0, second=0)
+            ai_used = get_usage(user["id"], "ai_description", start)
+            if ai_used >= int(ai_limit):
+                raise HTTPException(402, f"Limite de descripciones IA alcanzado ({ai_used}/{int(ai_limit)})")
     feat_list = [f.strip() for f in features.split(",")] if features else []
     desc = generate_description(title, price, currency, feat_list, api_key=DEEPSEEK_API_KEY)
-    add_usage(user["id"], "search")
+    add_usage(user["id"], "ai_description")
     return {"title": title, "description_es": desc}
 
 @app.post("/api/share/bonus")
-async def share_bonus(request: Request):
+async def share_bonus(request: Request, user: dict = Depends(get_current_user)):
+    if user:
+        from database import api as _api
+        start = datetime.utcnow().replace(day=1, hour=0, minute=0, second=0)
+        search_used = get_effective_usage(user["id"], start)
+        ai_used = get_usage(user["id"], "ai_description", start)
+        sub = get_sub(user["id"])
+        search_limit = 30
+        ai_limit = 10
+        if sub and sub.get("plan"):
+            search_limit = sub["plan"].get("search_limit_monthly", 30) or 30
+            ai_limit = sub["plan"].get("include_ai_description", 10) or 10
+        if search_used >= search_limit and ai_used >= ai_limit:
+            return {"ok": False, "message": "Ya alcanzaste el limite mensual"}
+        if search_used < search_limit:
+            _api("POST", "usage_records", data={"user_id": user["id"], "action": "referral_reward", "cost": -SHARE_BONUS})
+        if ai_used < ai_limit:
+            _api("POST", "usage_records", data={"user_id": user["id"], "action": "referral_reward", "cost": -1})
+        return {"ok": True, "bonus": SHARE_BONUS, "message": f"+{SHARE_BONUS} busquedas, +1 descripcion IA"}
     ip = request.client.host if request.client else "unknown"
     current = _anon_usage[ip]
-    if current >= 10:
-        return {"ok": False, "message": "Max " + str(ANON_TOTAL)}
-    _anon_usage[ip] = max(0, current - 50)
+    if current >= ANON_TOTAL:
+        return {"ok": False, "message": "Sin busquedas disponibles"}
+    new_usage = max(0, current - SHARE_BONUS)
+    _anon_usage[ip] = new_usage
     remaining = ANON_TOTAL - _anon_usage[ip]
     return {"ok": True, "bonus": SHARE_BONUS, "remaining": remaining}
 
 
 @app.get("/api/ai/analyze")
 def ai_analyze(q: str = Query(...), site: str = Query("MLA")):
+    # 尝试从缓存读取
+    cached = _cache_get(q, site, prefix="ai")
+    if cached:
+        return cached
+    
     import statistics
     from crawler import search_products
     from models import PriceStats
@@ -377,16 +499,52 @@ def ai_analyze(q: str = Query(...), site: str = Query("MLA")):
     from ai_analysis import analyze_pricing
     ai_data = analyze_pricing(products, stats, api_key=DEEPSEEK_API_KEY)
     
-    return {
+    result = {
         "suggested_price": ai_data.suggested_price,
         "reason": ai_data.reason,
         "risk_level": ai_data.risk_level,
         "competitor_insight": ai_data.competitor_insight,
         "currency": products[0].currency if products else "ARS",
     }
+    
+    _cache_set(q, site, result, prefix="ai")
+    return result
 
 
 
+
+@app.post("/api/referral/claim")
+async def claim_referral(data: dict, user=Depends(get_current_user)):
+    """新用户注册后用邀请码领取奖励"""
+    if not user:
+        raise HTTPException(401, "Iniciá sesión primero")
+    code = data.get("code", "").strip().upper()
+    if not code or len(code) != 6:
+        return {"ok": False, "message": "Código de invitación inválido"}
+    referrer_id = _find_user_by_referral(code)
+    if not referrer_id:
+        return {"ok": False, "message": "Código de invitación inválido"}
+    if referrer_id == user["id"]:
+        return {"ok": False, "message": "No podés invitarte a vos mismo"}
+    # 检查是否已领过
+    from database import api as _api
+    existing = _api("GET", "usage_records", f"?user_id=eq.{user['id']}&action=eq.referral_claimed&limit=1")
+    if existing and isinstance(existing, list) and len(existing) > 0:
+        return {"ok": False, "message": "Ya reclamaste el bonus por invitación"}
+    # 给邀请者加奖励
+    _api("POST", "usage_records", data={"user_id": referrer_id, "action": "referral_reward", "cost": -REFERRAL_BONUS})
+    # 标记已领取
+    _api("POST", "usage_records", data={"user_id": user["id"], "action": "referral_claimed", "cost": 0})
+    return {"ok": True, "bonus": REFERRAL_BONUS, "message": f"¡Has recibido {REFERRAL_BONUS} búsquedas gratis por invitación!"}
+
+@app.get("/api/referral/code")
+async def get_referral_code(user=Depends(get_current_user)):
+    """获取当前用户的邀请码"""
+    if not user:
+        raise HTTPException(401, "Iniciá sesión primero")
+    code = _make_referral_code(user["id"])
+    bonus = _get_ref_bonus(user["id"])
+    return {"code": code, "bonus_earned": bonus, "share_url": f"https://mlprecios.com?ref={code}"}
 
 @app.get("/api/autocomplete")
 async def autocomplete(q: str = "", site: str = "MLA"):
@@ -421,6 +579,57 @@ async def stripe_webhook(request: Request):
     result = stripe_handle_webhook(payload, sig)
     return {"ok": result}
 
+# ─── 卖家商品面板 ────────────────────────────────────────
+
+@app.get("/api/seller/products")
+def seller_list(category: str = Query(None), min_margin: float = Query(None),
+                max_margin: float = Query(None), sort_by: str = Query("created_at"),
+                sort_dir: str = Query("desc"), limit: int = Query(100), offset: int = Query(0),
+                user=Depends(get_current_user)):
+    if not user:
+        raise HTTPException(401, "Inicia sesion primero")
+    import sys; sys.path.insert(0, "/var/www/mlprecios/data")
+    import seller
+    return seller.list_products(user["id"], category, min_margin, max_margin, sort_by, sort_dir, limit, offset)
+
+@app.post("/api/seller/products")
+def seller_create(data: dict, user=Depends(get_current_user)):
+    if not user:
+        raise HTTPException(401, "Inicia sesion primero")
+    if not data.get("title") or not data.get("selling_price"):
+        raise HTTPException(400, "Faltan campos requeridos (title, selling_price)")
+    import sys; sys.path.insert(0, "/var/www/mlprecios/data")
+    import seller
+    return seller.create_product(user["id"], data)
+
+@app.patch("/api/seller/products/{product_id}")
+def seller_update(product_id: str, data: dict, user=Depends(get_current_user)):
+    if not user:
+        raise HTTPException(401, "Inicia sesion primero")
+    import sys; sys.path.insert(0, "/var/www/mlprecios/data")
+    import seller
+    result = seller.update_product(product_id, user["id"], data)
+    if not result:
+        raise HTTPException(404, "Producto no encontrado")
+    return result
+
+@app.delete("/api/seller/products/{product_id}")
+def seller_delete(product_id: str, user=Depends(get_current_user)):
+    if not user:
+        raise HTTPException(401, "Inicia sesion primero")
+    import sys; sys.path.insert(0, "/var/www/mlprecios/data")
+    import seller
+    if not seller.delete_product(product_id, user["id"]):
+        raise HTTPException(404, "Producto no encontrado")
+    return {"ok": True}
+
+@app.get("/api/seller/categories")
+def seller_categories(user=Depends(get_current_user)):
+    if not user:
+        raise HTTPException(401, "Inicia sesion primero")
+    import sys; sys.path.insert(0, "/var/www/mlprecios/data")
+    import seller
+    return seller.get_categories(user["id"])
 # ─── 静态文件（前端）────────────────────────────────────
 
 
