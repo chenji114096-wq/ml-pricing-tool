@@ -1,7 +1,9 @@
 """数据库：通过 Supabase REST API 操作（不需psycopg2）"""
 import os
+import time
 import requests
-from datetime import datetime
+from datetime import datetime, timedelta
+from concurrent.futures import ThreadPoolExecutor
 
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "https://lzyrulkuerxojuikwpam.supabase.co")
 SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_KEY",
@@ -64,25 +66,41 @@ def get_payments(user_id):
 def get_all_users():
     return api("GET", "users", "?order=created_at.desc&limit=100")
 
+_STATS_CACHE = {"t": 0.0, "data": None}
+
 def get_stats():
-    def count(t, f=""): 
+    now = time.time()
+    if _STATS_CACHE["data"] is not None and now - _STATS_CACHE["t"] < 60:
+        return _STATS_CACHE["data"]
+    def count(t, f=""):
         c = api("GET", t, f"?select=count{f}")
         return c[0]["count"] if c else 0
     def today_count(t, f=""):
-        from datetime import date
-        today = date.today().isoformat()
+        today = datetime.utcnow().date().isoformat()
         c = api("GET", t, f"?select=count&created_at=gte.{today}{f}")
         return c[0]["count"] if c else 0
-    return {
-        "total_users": count("users"),
-        "active_subs": count("user_subscriptions", "&status=eq.active"),
-        "total_searches": count("usage_records", "&action=eq.search"),
-        "total_descriptions": count("usage_records", "&action=eq.ai_description"),
-        "today_searches": today_count("usage_records", "&action=eq.search"),
-        "today_descriptions": today_count("usage_records", "&action=eq.ai_description"),
-        "total_payments": count("payment_records", "&status=eq.completed"),
-        "revenue": sum_payments(),
+    def revenue():
+        ps = api("GET", "payment_records", "?status=eq.completed&select=amount")
+        return round(sum(float(p.get("amount", 0)) for p in (ps if isinstance(ps, list) else [])), 2)
+    VISIT_OR = "&or=(action.eq.visit_app,action.eq.visit_home)"
+    calls = {
+        "total_users": (count, ("users",)),
+        "active_subs": (count, ("user_subscriptions", "&status=eq.active")),
+        "total_searches": (count, ("usage_records", "&action=eq.search")),
+        "total_descriptions": (count, ("usage_records", "&action=eq.ai_description")),
+        "today_searches": (today_count, ("usage_records", "&action=eq.search")),
+        "today_descriptions": (today_count, ("usage_records", "&action=eq.ai_description")),
+        "total_payments": (count, ("payment_records", "&status=eq.completed")),
+        "revenue": (revenue, ()),
+        "today_visits": (today_count, ("usage_records", VISIT_OR)),
+        "today_logins": (today_count, ("usage_records", "&action=eq.login")),
+        "total_visits": (count, ("usage_records", VISIT_OR)),
     }
+    with ThreadPoolExecutor(max_workers=11) as ex:
+        futs = {ex.submit(fn, *args): key for key, (fn, args) in calls.items()}
+        result = {name: fut.result() for fut, name in futs.items()}
+    _STATS_CACHE.update(t=now, data=result)
+    return result
 
 def sum_payments():
     ps = api("GET", "payment_records", "?status=eq.completed&select=amount")
@@ -117,3 +135,53 @@ def set_setting(key, val):
     api("POST", "system_settings", data={"key":key,"value":val},
         headers_extra={"Prefer": "resolution=merge-duplicates"})
     return True
+
+
+# ─── 活动追踪（访问/登录埋点）────────────────────────────
+
+def track_event(action, user_id=None):
+    """记录一条活动事件（visit_home / visit_app / login 等）"""
+    try:
+        data = {"action": action, "cost": 0}
+        if user_id:
+            data["user_id"] = user_id
+        return api("POST", "usage_records", data=data)
+    except Exception:
+        return None
+
+def get_recent_activity(limit=15):
+    try:
+        recs = api("GET", "usage_records", f"?order=created_at.desc&limit={limit}&select=id,user_id,action,created_at")
+        users = api("GET", "users", "?limit=300&select=id,email")
+        email_map = {u["id"]: u.get("email", "?") for u in (users or []) if u.get("id")}
+        out = []
+        for r in (recs or []):
+            out.append({
+                "time": r.get("created_at", ""),
+                "action": r.get("action", ""),
+                "email": email_map.get(r.get("user_id"), "anon"),
+            })
+        return out
+    except Exception:
+        return []
+
+def get_daily_activity(days=7):
+    try:
+        since = (datetime.utcnow() - timedelta(days=days - 1)).date().isoformat()
+        recs = api("GET", "usage_records", f"?created_at=gte.{since}&select=created_at,action&limit=2000")
+        daily = {}
+        for r in (recs or []):
+            d = (r.get("created_at") or "")[:10]
+            if not d:
+                continue
+            bucket = daily.setdefault(d, {"date": d, "visits": 0, "logins": 0, "searches": 0})
+            a = r.get("action", "")
+            if a in ("visit_app", "visit_home"):
+                bucket["visits"] += 1
+            elif a == "login":
+                bucket["logins"] += 1
+            elif a == "search":
+                bucket["searches"] += 1
+        return [daily[k] for k in sorted(daily)][-days:]
+    except Exception:
+        return []

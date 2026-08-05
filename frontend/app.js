@@ -37,6 +37,13 @@ async function api(method, path, body) {
   }
 }
 
+/* ─── Visit tracking (anónimo) ─── */
+(function () {
+  try {
+    fetch(API + '/track/visit', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ page: 'app' }) }).catch(() => { });
+  } catch (e) { }
+})();
+
 /* ═══════════════════════════════════════════════════════════
    Auth
    ═══════════════════════════════════════════════════════════ */
@@ -475,7 +482,30 @@ async function loadAdminPanel() {
   main.innerHTML = '<div class="loading-container"><div class="loading-spinner"></div><p>Cargando…</p></div>';
 
   if (adminTab === 'dashboard') {
-    const stats = await api('GET', '/admin/stats');
+    const [stats, activity] = await Promise.all([
+      api('GET', '/admin/stats'),
+      api('GET', '/admin/activity')
+    ]);
+    const daily = (activity && activity.daily) || [];
+    const maxD = Math.max(1, ...daily.map(d => Math.max(d.visits || 0, d.logins || 0, d.searches || 0)));
+    const bars = daily.map(d => {
+      const h = v => Math.round(((v || 0) / maxD) * 80);
+      return `<div style="flex:1;text-align:center">
+        <div style="display:flex;justify-content:center;align-items:flex-end;gap:3px;height:90px">
+          <div title="Visitas" style="width:10px;height:${h(d.visits)}px;background:var(--accent);border-radius:3px 3px 0 0"></div>
+          <div title="Logins" style="width:10px;height:${h(d.logins)}px;background:var(--success);border-radius:3px 3px 0 0"></div>
+          <div title="Búsquedas" style="width:10px;height:${h(d.searches)}px;background:var(--warning);border-radius:3px 3px 0 0"></div>
+        </div>
+        <div style="font-size:10px;color:var(--text-tertiary);margin-top:4px">${(d.date || '').slice(5)}</div>
+      </div>`;
+    }).join('');
+    const ACTION_LABEL = { visit_app: 'Visita app', visit_home: 'Visita web', login: 'Login', search: 'Búsqueda', ai_description: 'Descripción IA', referral_reward: 'Bonus referido' };
+    const recentRows = ((activity && activity.recent) || []).slice(0, 10).map(r => `
+      <tr>
+        <td class="mono" style="font-size:11px">${r.time ? new Date(r.time).toLocaleString('es-ES', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-'}</td>
+        <td>${ACTION_LABEL[r.action] || r.action}</td>
+        <td class="mono" style="font-size:12px">${r.email || 'anon'}</td>
+      </tr>`).join('');
     main.innerHTML = `
       <h2 style="font-size:20px;font-weight:700;margin-bottom:8px">Dashboard</h2>
       <p style="color:var(--text-tertiary);font-size:13px;margin-bottom:20px">Panorama general del negocio</p>
@@ -486,8 +516,19 @@ async function loadAdminPanel() {
         <div class="admin-stat"><div class="admin-stat-label">Hoy busquedas</div><div class="admin-stat-value" style="color:var(--accent-hover)">${stats.today_searches || 0}</div></div>
         <div class="admin-stat"><div class="admin-stat-label">Descripciones totales</div><div class="admin-stat-value">${stats.total_descriptions || 0}</div></div>
         <div class="admin-stat"><div class="admin-stat-label">Hoy descripciones</div><div class="admin-stat-value" style="color:var(--accent-hover)">${stats.today_descriptions || 0}</div></div>
+        <div class="admin-stat"><div class="admin-stat-label">Visitas hoy</div><div class="admin-stat-value" style="color:var(--accent-hover)">${stats.today_visits || 0}</div></div>
+        <div class="admin-stat"><div class="admin-stat-label">Logins hoy</div><div class="admin-stat-value" style="color:var(--success)">${stats.today_logins || 0}</div></div>
         <div class="admin-stat"><div class="admin-stat-label">Pagos completados</div><div class="admin-stat-value">${stats.total_payments || 0}</div></div>
         <div class="admin-stat"><div class="admin-stat-label">Ingresos (USD)</div><div class="admin-stat-value" style="color:var(--success)">$${stats.revenue || 0}</div></div>
+      </div>
+      <div style="margin-top:24px;border:1px solid var(--border);border-radius:12px;padding:16px">
+        <h3 style="font-size:15px;font-weight:700;margin-bottom:4px">Actividad últimos 7 días</h3>
+        <p style="font-size:11px;color:var(--text-tertiary);margin-bottom:12px">Visitas · Logins · Búsquedas</p>
+        <div style="display:flex;align-items:flex-end;gap:6px">${bars}</div>
+      </div>
+      <div style="margin-top:20px;border:1px solid var(--border);border-radius:12px;padding:16px">
+        <h3 style="font-size:15px;font-weight:700;margin-bottom:12px">Actividad reciente</h3>
+        <table class="admin-table"><thead><tr><th>Fecha</th><th>Acción</th><th>Usuario</th></tr></thead><tbody>${recentRows || '<tr><td colspan="3" style="color:var(--text-tertiary)">Sin actividad</td></tr>'}</tbody></table>
       </div>
     `;
   } else if (adminTab === 'plans') {

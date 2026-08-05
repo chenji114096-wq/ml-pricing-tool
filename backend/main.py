@@ -1,5 +1,5 @@
 """ML定价工具 - FastAPI后端 v2（Supabase REST API版）"""
-import os, statistics, re, json, hashlib, time
+import os, statistics, re, json, hashlib, time, threading
 from datetime import datetime
 from typing import Optional
 from fastapi import FastAPI, Query, Depends, HTTPException, Request
@@ -12,7 +12,7 @@ from database import (
     get_user, create_user, get_enabled_plans, get_plan, update_plan,
     get_all_plans, get_sub, get_usage, get_effective_usage, add_usage, get_payments,
     get_all_users, get_stats, get_settings, set_setting,
-    upsert_subscription
+    upsert_subscription, track_event
 )
 from auth import hash_password, verify_password, create_access_token, decode_token
 from crawler import search_products
@@ -198,11 +198,21 @@ def register(body: AuthBody):
     return {"token": token, "user": {"id": user["id"], "email": user["email"], "name": user.get("name",""), "role": user.get("role","user")}}
 
 @app.post("/api/auth/login")
+def _track_login(uid):
+    try:
+        track_event("login", uid)
+    except Exception:
+        pass
+
 def login(body: AuthBody):
     user = get_user(body.email)
     if not user or not verify_password(body.password, user["password_hash"]):
         raise HTTPException(401, "Email o contraseña incorrectos")
     token = create_access_token(user["id"])
+    try:
+        threading.Thread(target=_track_login, args=(user["id"],), daemon=True).start()
+    except Exception:
+        pass
     return {"token": token, "user": {"id": user["id"], "email": user["email"], "name": user.get("name",""), "role": user.get("role","user")}}
 
 @app.get("/api/auth/me")
@@ -210,6 +220,24 @@ def me(user=Depends(get_current_user)):
     if not user:
         return {"user": None}
     return {"user": {"id": user["id"], "email": user["email"], "name": user.get("name",""), "role": user.get("role","user")}}
+
+class VisitBody(BaseModel):
+    page: str = "app"
+
+@app.post("/api/track/visit")
+def track_visit(body: VisitBody = None, request: Request = None, user=Depends(get_current_user)):
+    """匿名访问埋点：首页 /precios/ 应用页加载时上报"""
+    try:
+        if request:
+            ua = (request.headers.get("user-agent") or "").lower()
+            if any(b in ua for b in ("bot", "spider", "crawl", "harvest", "wordpress",
+                                     "pricingcompass", "python-requests", "curl", "wget", "go-http")):
+                return {"ok": True}
+        page = body.page if body else "app"
+        track_event("visit_home" if page == "home" else "visit_app", user["id"] if user else None)
+    except Exception:
+        pass
+    return {"ok": True}
 
 # ─── 套餐 ────────────────────────────────────────────────
 
@@ -322,6 +350,11 @@ def admin_settings(admin=Depends(require_admin)):
 def admin_set_setting(data: dict, admin=Depends(require_admin)):
     set_setting(data["key"], data.get("value", ""))
     return {"ok": True}
+
+@app.get("/api/admin/activity")
+def admin_activity(admin=Depends(require_admin)):
+    from database import get_recent_activity, get_daily_activity
+    return {"recent": get_recent_activity(15), "daily": get_daily_activity(7)}
 
 # ─── 核心功能（搜索+分析）──────────────────────────────
 

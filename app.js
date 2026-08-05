@@ -37,6 +37,13 @@ async function api(method, path, body) {
   }
 }
 
+/* ─── Visit tracking (anónimo) ─── */
+(function () {
+  try {
+    fetch(API + '/track/visit', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ page: 'app' }) }).catch(() => { });
+  } catch (e) { }
+})();
+
 /* ═══════════════════════════════════════════════════════════
    Auth
    ═══════════════════════════════════════════════════════════ */
