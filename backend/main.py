@@ -316,10 +316,21 @@ def admin_stats(admin=Depends(require_admin)):
 
 @app.get("/api/admin/plans")
 def admin_plans(admin=Depends(require_admin)):
+    from database import api as _api
     plans = get_all_plans()
+    if not isinstance(plans, list):
+        return plans or []
+    # 批量：一次拉全部订阅计数
+    subs = _api("GET", "user_subscriptions", "?status=eq.active&select=plan_id&limit=1000")
+    from collections import Counter
+    plan_counts = Counter()
+    if isinstance(subs, list):
+        for s in subs:
+            pid = s.get("plan_id")
+            if pid:
+                plan_counts[pid] += 1
     for p in plans:
-        subs = get_sub(p["id"])
-        p["subscriber_count"] = 1 if subs else 0
+        p["subscriber_count"] = plan_counts.get(p.get("id"), 0)
     return plans
 
 @app.patch("/api/admin/plans/{plan_id}")
@@ -329,24 +340,54 @@ def admin_update_plan(plan_id: str, data: dict, admin=Depends(require_admin)):
 
 @app.get("/api/admin/users")
 def admin_users(admin=Depends(require_admin)):
+    from database import api as _api
     users = get_all_users()
-    # Enrich with subscription and usage
-    enriched = []
+    if not isinstance(users, list) or not users:
+        return []
+    ids = [u["id"] for u in users]
     start = datetime.utcnow().replace(day=1, hour=0, minute=0, second=0)
+    since = start.isoformat()
+
+    # ── 批量：3 次调用替代 N+1 ──
+    # 1) 订阅（含 plan）
+    subs = _api("GET", "user_subscriptions",
+                f"?user_id=in.({','.join(ids)})&select=user_id,plan:plan_id(slug)&limit=200")
+    subs_map = {}
+    if isinstance(subs, list):
+        for s in subs:
+            pl = s.get("plan") or {}
+            subs_map[s.get("user_id")] = pl.get("slug") if isinstance(pl, dict) else str(pl) or "free"
+
+    # 2) 本月所有 usage_records（search / ai_description / referral_reward 一次拉完）
+    recs = _api("GET", "usage_records",
+                f"?user_id=in.({','.join(ids)})&created_at=gte.{since}&select=user_id,action,cost&limit=2000")
+    from collections import defaultdict
+    search_cost = defaultdict(int)
+    ai_count = defaultdict(int)
+    if isinstance(recs, list):
+        for r in recs:
+            uid = r.get("user_id")
+            act = r.get("action")
+            cost = r.get("cost") or 0
+            if act == "search":
+                search_cost[uid] += cost
+            elif act == "referral_reward":
+                search_cost[uid] += cost  # 负值奖励，与 get_effective_usage 一致
+            elif act == "ai_description":
+                ai_count[uid] += 1
+
+    enriched = []
     for u in users:
-        sub = get_sub(u["id"])
-        plan_slug = sub["plan"]["slug"] if sub and sub.get("plan") else "free"
-        search_used = get_effective_usage(u["id"], start)
-        ai_used = get_usage(u["id"], "ai_description", start)
+        uid = u["id"]
         enriched.append({
-            "id": u["id"],
+            "id": uid,
             "email": u.get("email", ""),
             "name": u.get("name", ""),
-            "plan": plan_slug,
+            "plan": subs_map.get(uid, "free"),
             "role": u.get("role", "user"),
             "created_at": u.get("created_at", ""),
-            "search_used": search_used,
-            "ai_used": ai_used,
+            "search_used": max(0, search_cost.get(uid, 0)),
+            "ai_used": ai_count.get(uid, 0),
         })
     return enriched
 
