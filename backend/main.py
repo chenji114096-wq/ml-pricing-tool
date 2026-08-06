@@ -143,8 +143,11 @@ def check_usage(user):
         total = get_usage(user["id"], "search", ever_start)
         if total >= FREE_TOTAL:
             return False, f"Superaste las {FREE_TOTAL} búsquedas gratis. Actualizá tu plan", 0
-        remain = FREE_TOTAL - total - 1
-        return True, f"Te quedan {FREE_DAILY-daily} búsquedas hoy ({FREE_TOTAL} gratis, restan {remain})", FREE_DAILY - daily
+        remaining_today = FREE_DAILY - daily
+        total_left = FREE_TOTAL - total
+        if total_left <= 0:
+            return False, f"Agotaste las {FREE_TOTAL} búsquedas gratis. Actualizá tu plan", 0
+        return True, f"Te quedan {remaining_today} búsquedas hoy", remaining_today
     
     plan = sub.get("plan")
     
@@ -197,13 +200,13 @@ def register(body: AuthBody):
     token = create_access_token(user["id"])
     return {"token": token, "user": {"id": user["id"], "email": user["email"], "name": user.get("name",""), "role": user.get("role","user")}}
 
-@app.post("/api/auth/login")
 def _track_login(uid):
     try:
         track_event("login", uid)
     except Exception:
         pass
 
+@app.post("/api/auth/login")
 def login(body: AuthBody):
     user = get_user(body.email)
     if not user or not verify_password(body.password, user["password_hash"]):
@@ -223,16 +226,20 @@ def me(user=Depends(get_current_user)):
 
 class VisitBody(BaseModel):
     page: str = "app"
+    action: str = ""
 
 @app.post("/api/track/visit")
 def track_visit(body: VisitBody = None, request: Request = None, user=Depends(get_current_user)):
-    """匿名访问埋点：首页 /precios/ 应用页加载时上报"""
+    """匿名访问埋点：首页 /precios/ 应用页加载时上报；action=share 记录分享"""
     try:
         if request:
             ua = (request.headers.get("user-agent") or "").lower()
             if any(b in ua for b in ("bot", "spider", "crawl", "harvest", "wordpress",
                                      "pricingcompass", "python-requests", "curl", "wget", "go-http")):
                 return {"ok": True}
+        if body and body.action == "share":
+            track_event("share", user["id"] if user else None)
+            return {"ok": True}
         page = body.page if body else "app"
         track_event("visit_home" if page == "home" else "visit_app", user["id"] if user else None)
     except Exception:
@@ -254,7 +261,13 @@ def subscription(user=Depends(get_current_user)):
     plan_slug = sub["plan"]["slug"] if sub and sub.get("plan") else "free"
     ref_code = _make_referral_code(user["id"])
     ref_bonus = _get_ref_bonus(user["id"])
-    return {"logged_in": True, "user": {"id": user["id"], "email": user["email"], "name": user.get("name",""), "role": user.get("role","user")}, "plan": plan_slug, "remaining": remain, "message": msg, "referral_code": ref_code, "referral_bonus": ref_bonus}
+    sub_remaining = remain if isinstance(remain, int) else 0
+    sub_limit = FREE_DAILY
+    if sub and sub.get("plan"):
+        pl = sub["plan"]
+        if pl.get("search_limit_monthly"):
+            sub_limit = pl["search_limit_monthly"]
+    return {"logged_in": True, "user": {"id": user["id"], "email": user["email"], "name": user.get("name",""), "role": user.get("role","user")}, "plan": plan_slug, "remaining": sub_remaining, "limit": sub_limit, "message": msg, "referral_code": ref_code, "referral_bonus": ref_bonus}
 
 # ─── 支付 ────────────────────────────────────────────────
 
@@ -398,9 +411,18 @@ def search(q: str = Query(...), site: str = Query("MLA"), user=Depends(get_curre
                     median_price=stats["median"],total_listings=stats["total"],price_range=stats["range"])
     if cached and 'products' not in locals():
         products = [Product(**p) for p in products_data]
-    ai_data = analyze_pricing(products, so, api_key="")
-    ai = {"suggested_price":ai_data.suggested_price,"reason":ai_data.reason,
-          "risk_level":ai_data.risk_level,"competitor_insight":ai_data.competitor_insight}
+    ai_cached = _cache_get(q, site, prefix="ai")
+    if ai_cached:
+        ai = {"suggested_price": ai_cached.get("suggested_price"), "reason": ai_cached.get("reason"),
+              "risk_level": ai_cached.get("risk_level"), "competitor_insight": ai_cached.get("competitor_insight")}
+    else:
+        ai_data = analyze_pricing(products, so, api_key="")
+        ai = {"suggested_price":ai_data.suggested_price,"reason":ai_data.reason,
+              "risk_level":ai_data.risk_level,"competitor_insight":ai_data.competitor_insight}
+        try:
+            _cache_set(q, site, ai, prefix="ai")
+        except Exception as e:
+            print(f"[AI cache] {e}")
     
     if user:
         add_usage(user["id"], "search")
@@ -451,7 +473,9 @@ def search(q: str = Query(...), site: str = Query("MLA"), user=Depends(get_curre
             "products": products_with_profit,
             "stats":stats,"ai":ai,
             "profit_analysis": best_analysis,
-            "usage":{"remaining": msg if user else "Restan {remain} búsquedas"}}
+            "usage":{"remaining": (remain if user else (ANON_DAILY - _anon_daily[client_ip].get(today, 0))),
+                     "limit": (FREE_DAILY if user else ANON_DAILY),
+                     "message": (msg if user else f"Te quedan {ANON_DAILY - _anon_daily[client_ip].get(today, 0)} búsquedas hoy")}}
 
 @app.get("/api/describe")
 def describe(title: str = Query(...), price: float = Query(0), currency: str = Query("ARS"),

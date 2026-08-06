@@ -95,6 +95,8 @@ def get_stats():
         "today_visits": (today_count, ("usage_records", VISIT_OR)),
         "today_logins": (today_count, ("usage_records", "&action=eq.login")),
         "total_visits": (count, ("usage_records", VISIT_OR)),
+        "total_shares": (count, ("usage_records", "&action=eq.share")),
+        "today_shares": (today_count, ("usage_records", "&action=eq.share")),
     }
     with ThreadPoolExecutor(max_workers=11) as ex:
         futs = {ex.submit(fn, *args): key for key, (fn, args) in calls.items()}
