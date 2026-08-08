@@ -151,7 +151,7 @@ const I18N = {
     lang_toggle_title: '语言 / Idioma',
   }
 };
-let LANG = localStorage.getItem('ml_lang') || 'es';
+let LANG = localStorage.getItem('ml_lang') || ((navigator.language || '').toLowerCase().startsWith('zh') ? 'zh' : 'es');
 function T(key) { return (I18N[LANG] && I18N[LANG][key]) || I18N.es[key] || key; }
 function toggleLang() { LANG = LANG === 'zh' ? 'es' : 'zh'; localStorage.setItem('ml_lang', LANG); applyLang(); }
 function applyLang() {
