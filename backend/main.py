@@ -17,7 +17,7 @@ from database import (
 from auth import hash_password, verify_password, create_access_token, decode_token
 from crawler import search_products
 from ai_analysis import analyze_pricing, generate_description
-from tax_calc import calc_profit, format_profit, FX
+from tax_calc import calc_profit, format_profit, FX, calc_profit_cn, suggest_price_cn, cn_verdict, HEAD_FREIGHT_CNY, CNY_PER_USD
 from payment import mp_create_checkout, stripe_create_checkout
 
 
@@ -412,8 +412,76 @@ def admin_activity(admin=Depends(require_admin)):
 
 # ─── 核心功能（搜索+分析）──────────────────────────────
 
+# ─── 中国卖家利润计算器 ────────────────────────────────
+
+class ProfitCalcBody(BaseModel):
+    site: str = "MLA"
+    selling_price: float = 0       # 本地售价（可选）
+    cost_cny: float = 0            # 采购成本（CNY）
+    freight_cny: float = 0         # 头程运费（CNY/件，0=用站点默认）
+    weight_kg: float = 1.0
+    target_margin: float = 0.20    # 目标净利率
+
+@app.post("/api/profit/calc")
+def profit_calc(body: ProfitCalcBody):
+    """中国卖家利润计算器：成本(CNY)→净利润/ROI + 建议售价反推"""
+    site = body.site.upper()
+    if site not in HEAD_FREIGHT_CNY:
+        site = "MLA"
+    freight = body.freight_cny if body.freight_cny > 0 else None
+    cost = max(0, body.cost_cny)
+
+    # 建议售价表（目标净利率 10%-35%）
+    suggestions = {}
+    for m in (0.10, 0.15, 0.20, 0.25, 0.30, 0.35):
+        suggestions[f"{int(m*100)}"] = round(suggest_price_cn(site, cost, freight, body.weight_kg, m), 2)
+
+    result = {
+        "site": site,
+        "cost_cny": cost,
+        "freight_cny": round(freight or HEAD_FREIGHT_CNY[site], 2),
+        "suggestions": suggestions,
+        "meta": {
+            "cny_rate": f"1 USD = ¥{CNY_PER_USD:.2f}",
+            "default_freight_cny": HEAD_FREIGHT_CNY[site],
+        },
+        "analysis": None,
+    }
+
+    if body.selling_price and body.selling_price > 0:
+        p = calc_profit_cn(body.selling_price, site, cost, freight, body.weight_kg)
+        result["analysis"] = {
+            "selling_price": p.selling_price,
+            "currency": p.currency,
+            "revenue_usd": p.revenue_usd,
+            "revenue_cny": p.revenue_cny,
+            "cost_cny": p.cost_cny,
+            "freight_cny": p.freight_cny,
+            "duty_cny": p.duty_cny,
+            "ml_fee_cny": p.ml_fee_cny,
+            "withdraw_cny": p.withdraw_cny,
+            "total_cost_cny": p.total_cost_cny,
+            "net_cny": p.net_cny,
+            "margin": p.margin,
+            "roi": p.roi,
+            "verdict": cn_verdict(p.margin),
+            "breakdown": p.breakdown,
+        }
+    return result
+
+
+@app.get("/api/profit/calc")
+def profit_calc_get(site: str = "MLA", selling_price: float = 0, cost_cny: float = 0,
+                    freight_cny: float = 0, weight_kg: float = 1.0, target_margin: float = 0.20):
+    """GET 版利润计算器（便于直接测试/链接）"""
+    return profit_calc(ProfitCalcBody(site=site, selling_price=selling_price,
+                                      cost_cny=cost_cny, freight_cny=freight_cny,
+                                      weight_kg=weight_kg, target_margin=target_margin))
+
+
 @app.get("/api/search")
-def search(q: str = Query(...), site: str = Query("MLA"), user=Depends(get_current_user), request: Request = None):
+def search(q: str = Query(...), site: str = Query("MLA"), cost_cny: float = Query(0),
+           freight_cny: float = Query(0), user=Depends(get_current_user), request: Request = None):
     if user:
         allowed, msg, remain = check_usage(user)
         if not allowed:
@@ -473,7 +541,9 @@ def search(q: str = Query(...), site: str = Query("MLA"), user=Depends(get_curre
         _anon_usage[client_ip] += 1
         _anon_daily[client_ip][today] = _anon_daily[client_ip].get(today, 0) + 1
     # 利润计算：对每个产品算到手价+利润率
+    cn_mode = cost_cny > 0 or freight_cny > 0
     products_with_profit = []
+    cn_items = []
     for p in (products_data if cached else products)[:20]:
         if cached:
             price = p["price"]
@@ -482,7 +552,7 @@ def search(q: str = Query(...), site: str = Query("MLA"), user=Depends(get_curre
             price = p.price
             currency = p.currency
         profit = calc_profit(price, currency, cost_price=0)
-        products_with_profit.append({
+        item = {
             "title": p["title"] if cached else p.title,
             "price": price,
             "currency": currency,
@@ -495,7 +565,31 @@ def search(q: str = Query(...), site: str = Query("MLA"), user=Depends(get_curre
                 "shipping": profit.shipping_cost, "usd": profit.net_usd,
                 "breakdown": profit.breakdown
             }
-        })
+        }
+        # 中国卖家视角利润
+        if cn_mode:
+            cn = calc_profit_cn(price, site, cost_cny, freight_cny or None)
+            item["_profit_cn"] = {
+                "net_cny": cn.net_cny, "margin": cn.margin, "roi": cn.roi,
+                "revenue_cny": cn.revenue_cny, "total_cost_cny": cn.total_cost_cny,
+                "verdict": cn_verdict(cn.margin),
+            }
+            cn_items.append(item)
+        products_with_profit.append(item)
+
+    # 中国卖家视角总览
+    cn_analysis = None
+    if cn_items:
+        ok_items = [i for i in cn_items if i["_profit_cn"]["verdict"] in ("strong", "ok")]
+        cn_analysis = {
+            "mode": True,
+            "cost_cny": cost_cny,
+            "freight_cny": freight_cny or HEAD_FREIGHT_CNY.get(site, 55.0),
+            "count": len(cn_items),
+            "opportunities": len(ok_items),
+            "avg_margin": round(sum(i["_profit_cn"]["margin"] for i in cn_items) / len(cn_items), 1),
+            "best": max(cn_items, key=lambda i: i["_profit_cn"]["margin"]) if cn_items else None,
+        }
     
     # 最佳利润分析
     if products_with_profit:
@@ -514,6 +608,7 @@ def search(q: str = Query(...), site: str = Query("MLA"), user=Depends(get_curre
             "products": products_with_profit,
             "stats":stats,"ai":ai,
             "profit_analysis": best_analysis,
+            "cn_analysis": cn_analysis,
             "usage":{"remaining": (remain if user else (ANON_DAILY - _anon_daily[client_ip].get(today, 0))),
                      "limit": (FREE_DAILY if user else ANON_DAILY),
                      "message": (msg if user else f"Te quedan {ANON_DAILY - _anon_daily[client_ip].get(today, 0)} búsquedas hoy")}}

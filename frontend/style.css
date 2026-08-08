@@ -662,3 +662,77 @@ svg { flex-shrink: 0; }
 }
 .search-clear{position:absolute;right:6px;top:50%;transform:translateY(-50%);width:20px;height:20px;border-radius:50%;background:var(--bg-tertiary);border:1px solid var(--border-primary);color:var(--text-tertiary);font-size:11px;cursor:pointer;display:none;align-items:center;justify-content:center;z-index:2;line-height:1;padding:0}.search-clear.show{display:flex}.search-clear:hover{background:var(--bg-hover);color:var(--danger)}
 .search-suggestions{position:absolute;top:100%;left:0;right:0;background:var(--bg2);border:1px solid var(--bor);border-radius:0 0 var(--r2) var(--r2);z-index:10;max-height:240px;overflow-y:auto;display:none}.search-suggestions.show{display:block}.ss-item{padding:10px 14px;font-size:13px;color:var(--t2);cursor:pointer;transition:.1s}.ss-item:hover{background:var(--bg3);color:var(--t1)}
+
+/* ═══════════════════════════════════════════════════════════
+   中国卖家模式 + 利润计算器 (2026-08-08)
+   ═══════════════════════════════════════════════════════════ */
+.lang-toggle { font-size: 13px; font-weight: 600; padding: 6px 12px; border-radius: var(--radius-md); }
+
+.cn-panel { margin-top: 14px; padding: 14px 16px; background: var(--bg-tertiary); border: 1px solid var(--border-primary); border-radius: var(--radius-lg); }
+.cn-toggle-row { display: flex; align-items: center; gap: 12px; }
+.cn-toggle-text { flex: 1; }
+.cn-title { font-size: 14px; font-weight: 700; }
+.cn-sub { font-size: 12px; color: var(--text-tertiary); margin-top: 2px; }
+.cn-inputs { margin-top: 12px; }
+.cn-input-row { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; }
+.cn-field { flex: 1; min-width: 130px; margin-bottom: 0; }
+.cn-field label { font-size: 12px; }
+.cn-field input { width: 100%; }
+
+/* Switch */
+.switch { position: relative; display: inline-block; width: 42px; height: 24px; flex-shrink: 0; }
+.switch input { opacity: 0; width: 0; height: 0; }
+.slider { position: absolute; cursor: pointer; inset: 0; background: var(--border); border-radius: 24px; transition: .25s; }
+.slider:before { position: absolute; content: ""; height: 18px; width: 18px; left: 3px; bottom: 3px; background: #fff; border-radius: 50%; transition: .25s; }
+.switch input:checked + .slider { background: var(--accent); }
+.switch input:checked + .slider:before { transform: translateX(18px); }
+
+/* 利润计算器 */
+.calc-section { max-width: 860px; margin: 0 auto 40px; padding: 0 20px; }
+.calc-card { background: var(--bg-secondary); border: 1px solid var(--border-primary); border-radius: var(--radius-xl); padding: 24px; }
+.calc-header { display: flex; align-items: center; gap: 14px; margin-bottom: 18px; }
+.calc-flag { font-size: 34px; line-height: 1; }
+.calc-title { font-size: 20px; font-weight: 800; }
+.calc-sub { font-size: 13px; color: var(--text-tertiary); margin-top: 4px; }
+.calc-form { display: flex; gap: 14px; flex-wrap: wrap; align-items: flex-end; }
+.calc-field-sm { flex: 1; min-width: 150px; margin-bottom: 0; }
+.calc-field-sm label { font-size: 12px; }
+.calc-field-sm input, .calc-field-sm select { width: 100%; }
+.calc-result { margin-top: 18px; padding-top: 18px; border-top: 1px solid var(--border-primary); }
+.calc-head { font-size: 13px; font-weight: 700; color: var(--text-secondary); margin-bottom: 12px; }
+.calc-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 24px; }
+@media (max-width: 640px) { .calc-grid { grid-template-columns: 1fr; } }
+.calc-col { display: flex; flex-direction: column; gap: 8px; }
+.calc-verdict { margin-top: 14px; display: inline-block; padding: 6px 16px; border-radius: 999px; font-size: 13px; font-weight: 700; }
+.calc-msg-warn { padding: 14px; background: rgba(245,158,11,.1); color: var(--warning); border-radius: var(--radius-md); font-size: 14px; }
+.calc-loading { color: var(--text-tertiary); font-size: 14px; }
+.calc-suggest { margin-top: 16px; }
+.calc-suggest-title { font-size: 13px; font-weight: 700; color: var(--text-secondary); margin-bottom: 10px; }
+.calc-suggest-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; }
+@media (max-width: 720px) { .calc-suggest-grid { grid-template-columns: repeat(3, 1fr); } }
+.calc-suggest-item { background: var(--bg-tertiary); border: 1px solid var(--border-primary); border-radius: var(--radius-md); padding: 10px; text-align: center; }
+.calc-suggest-item .cn-ov-value { font-size: 13px; }
+.cn-ov-sub { font-size: 11px; color: var(--text-tertiary); margin-top: 2px; }
+
+/* CN 结果总览 */
+.cn-overview { margin-top: 16px; padding: 16px; background: linear-gradient(135deg, rgba(99,102,241,.08), rgba(139,92,246,.06)); border: 1px solid rgba(99,102,241,.3); border-radius: var(--radius-lg); }
+.cn-overview-head { font-size: 15px; font-weight: 800; margin-bottom: 12px; }
+.cn-overview-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+@media (max-width: 640px) { .cn-overview-grid { grid-template-columns: repeat(2, 1fr); } }
+.cn-ov-item { background: var(--bg-secondary); border-radius: var(--radius-md); padding: 10px 12px; }
+.cn-ov-label { font-size: 11px; color: var(--text-tertiary); }
+.cn-ov-value { font-size: 16px; font-weight: 800; margin-top: 2px; }
+.cn-ov-best { margin-top: 12px; font-size: 13px; color: var(--text-secondary); }
+
+/* 产品卡 CN 利润行 */
+.cn-profit { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 8px; padding: 6px 8px; border-radius: var(--radius-sm); font-size: 11px; font-weight: 700; }
+.cn-profit-net { color: #fff; }
+.cn-profit-roi { opacity: .85; }
+.cn-profit-margin { opacity: .85; }
+.cn-profit-v { padding: 2px 8px; border-radius: 999px; font-size: 10px; }
+.cn-v-strong { background: rgba(34,197,94,.15); color: #4ade80; border: 1px solid rgba(34,197,94,.3); }
+.cn-v-ok { background: rgba(99,102,241,.15); color: #a5b4fc; border: 1px solid rgba(99,102,241,.3); }
+.cn-v-caution { background: rgba(245,158,11,.15); color: #fbbf24; border: 1px solid rgba(245,158,11,.3); }
+.cn-v-no { background: rgba(239,68,68,.12); color: #f87171; border: 1px solid rgba(239,68,68,.3); }
+.positive { color: var(--success); }
+.negative { color: #f87171; }

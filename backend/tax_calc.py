@@ -130,3 +130,146 @@ def format_profit(p: ProfitCalc) -> str:
         f"(利润率 {p.profit_margin}%) "
         f"[≈ USD ${p.price_usd:,.2f} → USD ${p.net_usd:,.2f}]"
     )
+
+
+# ═══════════════════════════════════════════════════════════
+# 中国卖家视角：人民币成本利润模型（跨境出口）
+# ═══════════════════════════════════════════════════════════
+import os as _os
+
+# 人民币汇率（1 USD = ? CNY）— 可用环境变量 FX_CNY 覆盖
+CNY_PER_USD = float(_os.environ.get("FX_CNY", "7.2"))
+
+# 进口综合税（关税 + 增值税等，按 CIF 货值估算，跨境电商常用口径）
+# 巴西最重（II+IPI+ICMS/PIS/COFINS 综合可达 60%），阿根廷次之，墨西哥/智利较轻
+IMPORT_DUTY = {
+    "MLA": 0.35,   # 阿根廷：关税 + IVA 21%，电子品类常见 30-40%
+    "MLB": 0.60,   # 巴西：进口综合税 55-65%
+    "MLM": 0.25,   # 墨西哥：关税 + IVA 16%，综合 20-30%
+    "MLC": 0.25,   # 智利：关税 6% + IVA 19%
+    "MLU": 0.30,   # 乌拉圭：关税 + IVA
+}
+
+# 头程物流（中国→拉美 空运专线，单位 CNY/公斤，1kg 小包常见价格）
+HEAD_FREIGHT_CNY = {
+    "MLA": 55.0,
+    "MLB": 65.0,
+    "MLM": 45.0,
+    "MLC": 60.0,
+    "MLU": 60.0,
+}
+
+# 回款提现综合费率（万里汇/连连/Payoneer 等，含汇损，约 0.3-1.2%）
+WITHDRAW_RATE = 0.01
+
+# 站点 → 本地货币
+SITE_CURRENCY = {"MLA": "ARS", "MLB": "BRL", "MLM": "MXN", "MLC": "CLP", "MLU": "UYU"}
+
+
+@dataclass
+class CNProfitCalc:
+    site: str
+    currency: str
+    selling_price: float     # 本地售价
+    revenue_usd: float       # 回款美元
+    revenue_cny: float       # 回款人民币
+    cost_cny: float          # 采购成本（CNY）
+    freight_cny: float       # 头程运费（CNY）
+    duty_cny: float          # 进口税（CNY）
+    ml_fee_cny: float        # 平台佣金（折 CNY）
+    withdraw_cny: float      # 提现费（CNY）
+    total_cost_cny: float    # 总成本（CNY）
+    net_cny: float           # 净利润（CNY）
+    margin: float            # 净利率 %
+    roi: float               # 投入回报率 %（净利润 ÷ 采购+头程）
+    breakdown: dict
+
+
+def _cn_site_key(site_or_currency):
+    for s in TAXES:
+        if s == site_or_currency:
+            return s
+    return "MLA"
+
+
+def calc_profit_cn(selling_price: float, site: str = "MLA", cost_cny: float = 0,
+                   freight_cny: float = None, weight_kg: float = 1.0,
+                   seller_level: str = "default") -> CNProfitCalc:
+    """中国卖家视角利润：采购价(CNY) + 头程(CNY) → 净利润/ROI"""
+    site_key = _cn_site_key(site)
+    currency = SITE_CURRENCY.get(site_key, "ARS")
+    fx = FX.get(currency, 1250.0)
+    fee_rate = ML_FEES.get(site_key, {}).get(seller_level, 0.13)
+
+    if freight_cny is None:
+        freight_cny = HEAD_FREIGHT_CNY.get(site_key, 55.0) * weight_kg
+
+    # 进口税按 CIF（货值+运费）估算
+    duty_cny = (cost_cny + freight_cny) * IMPORT_DUTY.get(site_key, 0.30)
+    fixed_cny = cost_cny + freight_cny + duty_cny
+
+    revenue_usd = selling_price / fx
+    revenue_cny = revenue_usd * CNY_PER_USD
+    ml_fee_cny = revenue_cny * fee_rate
+    withdraw_cny = revenue_cny * WITHDRAW_RATE
+    total_cost_cny = fixed_cny + ml_fee_cny + withdraw_cny
+    net_cny = revenue_cny - total_cost_cny
+    margin = (net_cny / revenue_cny * 100) if revenue_cny > 0 else 0
+    invest = cost_cny + freight_cny
+    roi = (net_cny / invest * 100) if invest > 0 else 0
+
+    return CNProfitCalc(
+        site=site_key,
+        currency=currency,
+        selling_price=round(selling_price, 2),
+        revenue_usd=round(revenue_usd, 2),
+        revenue_cny=round(revenue_cny, 2),
+        cost_cny=round(cost_cny, 2),
+        freight_cny=round(freight_cny, 2),
+        duty_cny=round(duty_cny, 2),
+        ml_fee_cny=round(ml_fee_cny, 2),
+        withdraw_cny=round(withdraw_cny, 2),
+        total_cost_cny=round(total_cost_cny, 2),
+        net_cny=round(net_cny, 2),
+        margin=round(margin, 1),
+        roi=round(roi, 1),
+        breakdown={
+            "site": site_key,
+            "currency": currency,
+            "exchange": f"1 USD = {fx:,.0f} {currency}",
+            "fx": fx,
+            "cny_rate": f"1 USD = ¥{CNY_PER_USD:.2f}",
+            "commission_rate": f"{fee_rate*100:.0f}%",
+            "duty_rate": f"{IMPORT_DUTY.get(site_key, 0.30)*100:.0f}%",
+        },
+    )
+
+
+def suggest_price_cn(site: str = "MLA", cost_cny: float = 0, freight_cny: float = None,
+                     weight_kg: float = 1.0, target_margin: float = 0.20,
+                     seller_level: str = "default") -> float:
+    """反推建议售价（本地货币）：给定目标净利率 → 需要卖多少钱"""
+    site_key = _cn_site_key(site)
+    currency = SITE_CURRENCY.get(site_key, "ARS")
+    fx = FX.get(currency, 1250.0)
+    fee_rate = ML_FEES.get(site_key, {}).get(seller_level, 0.13)
+    if freight_cny is None:
+        freight_cny = HEAD_FREIGHT_CNY.get(site_key, 55.0) * weight_kg
+    duty_cny = (cost_cny + freight_cny) * IMPORT_DUTY.get(site_key, 0.30)
+    fixed_cny = cost_cny + freight_cny + duty_cny
+    denom = 1 - fee_rate - WITHDRAW_RATE - target_margin
+    if denom <= 0:
+        denom = 0.05
+    revenue_cny = fixed_cny / denom
+    return revenue_cny / CNY_PER_USD * fx
+
+
+def cn_verdict(margin: float) -> str:
+    """中国卖家机会判断"""
+    if margin >= 30:
+        return "strong"    # 强机会
+    if margin >= 15:
+        return "ok"        # 可做
+    if margin >= 5:
+        return "caution"   # 谨慎
+    return "no"            # 不建议
